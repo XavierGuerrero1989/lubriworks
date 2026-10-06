@@ -2,20 +2,20 @@
 
 La configuración pública recibida se aplicó localmente para el proyecto `lubriworks-77db2`, con dominio de Auth `lubriworks-77db2.firebaseapp.com`. El SDK queda configurado; las credenciales privadas de la API y el despliegue siguen pendientes. `.env.local` está excluido de Git. No se publicaron reglas ni se modificó la consola Firebase.
 
-## 1. Lo que necesitás crear en Firebase
+## 1. Estado de Firebase y pasos pendientes
 
-1. Crear un proyecto nuevo llamado **LubriWorks**. Usar un proyecto distinto para pruebas y producción cuando habilitemos clientes reales.
-2. Registrar una aplicación **Web**. Firebase Hosting no es necesario: el despliegue será en Vercel.
-3. En **Authentication → Sign-in method**, habilitar **Email/Password**.
-4. En **Firestore Database**, crear la base `(default)`, edición Standard, en **modo producción**. Elegir una región cercana a los usuarios y al backend; para Argentina considerar São Paulo si está disponible. La ubicación debe elegirse con cuidado antes de crearla.
+1. **Completado:** proyecto `lubriworks-77db2` creado. Usar un proyecto distinto para pruebas y producción cuando habilitemos clientes reales.
+2. **Completado:** aplicación Web registrada y configuración pública aplicada localmente. Firebase Hosting no es necesario: el despliegue será en Vercel.
+3. **Completado, según confirmación del titular:** Authentication con Email/Password habilitado.
+4. **Completado, según confirmación del titular:** Firestore creado en modo producción. Las reglas de LubriWorks todavía no se publicaron desde este entorno.
 5. Publicar el contenido de `firestore.rules` en la consola de Firestore, o usar `firebase deploy --only firestore:rules,firestore:indexes --project TU_PROJECT_ID`. Estas reglas deniegan acceso directo; el backend usa Firebase Admin con autorización propia.
 6. En **Authentication → Settings → Authorized domains**, agregar tu dominio de Vercel y el dominio definitivo. Agregar `localhost` / `127.0.0.1` sólo para desarrollo cuando corresponda.
-7. En **Project settings → General → Your apps**, copiar los valores de la configuración web. Me podés compartir esa configuración pública para conectar el frontend.
+7. **Configuración recibida:** cargar también los valores públicos de la aplicación Web en las variables de Vercel indicadas abajo.
 8. En **Project settings → Service accounts**, generar una clave privada de servicio para el backend. Guardarla de manera privada. Sus valores se cargan directamente en los secretos de Vercel; no pegar el JSON privado en el chat ni guardarlo en Git.
 
 ## 2. Lo que necesitás crear en Vercel
 
-1. Crear o elegir un repositorio privado para el código de LubriWorks. No incluir `.env.local`, claves, `node_modules` ni `dist`.
+1. **Completado:** código publicado en `https://github.com/XavierGuerrero1989/lubriworks`, rama `main`. El titular autorizó el repositorio público. `.env.local`, claves privadas, `node_modules` y `dist` quedan excluidos.
 2. Crear un proyecto Vercel e importar ese repositorio. Alternativamente se puede desplegar la carpeta con Vercel CLI.
 3. Framework: **Vite**. Node.js **22.x**. Build: `npm run build`. Output: `dist`. Root: raíz del proyecto LubriWorks.
 4. Cargar estas variables. La configuración pública se incorpora al build y requiere redeploy cuando cambia.

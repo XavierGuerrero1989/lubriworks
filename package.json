@@ -1,0 +1,44 @@
+{
+  "name": "lubriworks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "tsx scripts/dev.ts",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "bootstrap": "tsx --env-file=.env.local scripts/bootstrap.ts",
+    "vapid": "web-push generate-vapid-keys",
+    "test:emulators": "firebase emulators:exec --project demo-lubriworks --only auth,firestore \"vitest run --config vitest.emulator.config.ts\""
+  },
+  "dependencies": {
+    "firebase": "^12.0.0",
+    "firebase-admin": "^14.5.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "web-push": "^3.6.7",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/web-push": "^3.6.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "prettier": "^3.6.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.0",
+    "uuid": "^11.1.1"
+  }
+}

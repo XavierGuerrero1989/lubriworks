@@ -80,3 +80,7 @@ Los roles se consultan en Firestore en cada operación; no se confía en un camp
 Azul petróleo `#12343B`, ámbar aceite `#F5A623`, blanco hielo `#F4F7F8`, gris pizarra `#52636B`. El logo proviene de la propuesta aprobada. El ícono de PWA se generó con la herramienta integrada de imágenes, conservando el símbolo y quitando la tipografía.
 
 Prompt del ícono: “Create the PWA app icon for this exact LubriWorks identity. Isolate and preserve ONLY the oil droplet/mechanical nut symbol from the left of the reference logo. No words or text. Center the symbol with generous 20% safe padding on a solid ice white #F4F7F8 square background. Preserve petroleum blue and amber colors and the recognizable shape. Flat clean app icon, square 1024x1024, no corner rounding, no shadows or 3D. Output one icon.” El resultado entregado por la herramienta mide 1254×1254; el manifest declara la dimensión real.
+
+## Compatibilidad del runtime de Vercel
+
+El backend usa importaciones relativas con extensión `.js` y una comprobación TypeScript con `NodeNext`. El build ejecuta `check:runtime` con `--no-experimental-require-module` para detectar dependencias que no arrancan en Vercel. Firebase Admin 14 usa `jwks-rsa` 4, que requiere `jose` sin importar dinámicamente su edición ESM. Se fija `jose` 5.10 dentro de `jwks-rsa` mediante un override acotado; la carga de Auth, Firestore y Web Push se verifica durante cada build. Seguimiento del problema: https://github.com/auth0/node-jwks-rsa/issues/507.

@@ -1,6 +1,6 @@
 # Puesta en marcha: Firebase + Vercel
 
-La configuración pública recibida se aplicó localmente para el proyecto `lubriworks-77db2`, con dominio de Auth `lubriworks-77db2.firebaseapp.com`. El SDK queda configurado; las credenciales privadas de la API y el despliegue siguen pendientes. `.env.local` está excluido de Git. No se publicaron reglas ni se modificó la consola Firebase.
+La configuración pública recibida se aplicó localmente para el proyecto `lubriworks-77db2`, con dominio de Auth `lubriworks-77db2.firebaseapp.com`. El SDK y las variables públicas y privadas de Firebase Admin quedaron configurados en Vercel. La aplicación se despliega en `https://lubriworks.vercel.app`. `.env.local` está excluido de Git. Se publicaron las reglas de `firestore.rules` en producción y se autorizó `lubriworks.vercel.app` en Firebase Auth.
 
 ## 1. Estado de Firebase y pasos pendientes
 
@@ -46,6 +46,8 @@ Para generar `CRON_SECRET`, usar un generador criptográfico de contraseñas o `
 
 5. Desplegar, agregar ese dominio a Firebase Auth y comprobar registro, verificación de correo e ingreso.
 6. Revisar los logs de las funciones `/api/rpc` y `/api/reminders`.
+
+Las claves VAPID y `CRON_SECRET` se generaron y cargaron en Production. El contacto Web Push es `mailto:xavier@brainworks.ar`. El cron está habilitado. En el plan Hobby se ejecuta dentro de una ventana de una hora desde las 12:00 UTC (09:00–10:00 Argentina). La entrega a un dispositivo real requiere primero crear la cuenta, el tenant y una suscripción push.
 
 ## 3. Primer administrador y primer tenant
 

@@ -22,3 +22,13 @@ Fecha: 5 de octubre de 2026.
 - Impresión/PDF del comprobante en los navegadores de operación.
 
 Las pruebas de emulador no validan configuración de credenciales, IAM, dominios autorizados ni cuotas de producción. No se enviaron correos ni notificaciones a personas reales, ni se modificaron BrainRetail o BrainFleet.
+
+## Verificación en producción — 7 de octubre de 2026
+
+- Dominio `lubriworks.vercel.app` autorizado en Firebase Auth.
+- Reglas de Firestore compiladas y publicadas en `lubriworks-77db2`.
+- Web Push configurado en Vercel con claves privadas como secretos y contacto `xavier@brainworks.ar`; cron diario habilitado.
+- API sin sesión: HTTP 401. Cron sin credencial: HTTP 401.
+- Cron autorizado: HTTP 200, `completed: true`, `pushConfigured: true`, cero notificaciones y cero envíos (sin datos elegibles de clientes). Confirma conexión real con Firebase Admin y Firestore.
+- Build y comprobación de arranque sin require(ESM) aprobados; 33 pruebas de negocio y 18 de API/reglas en emuladores aprobadas. npm audit: cero vulnerabilidades.
+- Falta designar la cuenta inicial de superadministrador, crear el primer tenant y probar recepción push en un dispositivo con consentimiento.

@@ -7,7 +7,7 @@ La configuración pública recibida se aplicó localmente para el proyecto `lubr
 1. **Completado:** proyecto `lubriworks-77db2` creado. Usar un proyecto distinto para pruebas y producción cuando habilitemos clientes reales.
 2. **Completado:** aplicación Web registrada y configuración pública aplicada localmente. Firebase Hosting no es necesario: el despliegue será en Vercel.
 3. **Completado, según confirmación del titular:** Authentication con Email/Password habilitado.
-4. **Completado, según confirmación del titular:** Firestore creado en modo producción. Las reglas de LubriWorks todavía no se publicaron desde este entorno.
+4. **Completado, según confirmación del titular:** Firestore creado en modo producción. Las reglas de LubriWorks se publicaron y compilaron correctamente desde Firebase CLI.
 5. Publicar el contenido de `firestore.rules` en la consola de Firestore, o usar `firebase deploy --only firestore:rules,firestore:indexes --project TU_PROJECT_ID`. Estas reglas deniegan acceso directo; el backend usa Firebase Admin con autorización propia.
 6. En **Authentication → Settings → Authorized domains**, agregar tu dominio de Vercel y el dominio definitivo. Agregar `localhost` / `127.0.0.1` sólo para desarrollo cuando corresponda.
 7. **Configuración recibida:** cargar también los valores públicos de la aplicación Web en las variables de Vercel indicadas abajo.

@@ -1,1 +1,1 @@
-export { default } from "../server/reminders";
+export { default } from "../server/reminders.js";

@@ -5,7 +5,7 @@ import {
   key,
   type State,
   type StateCollection,
-} from "../shared/model";
+} from "../shared/model.js";
 export async function loadState(
   db: Firestore,
   tenantId: string,

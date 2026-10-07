@@ -1,4 +1,4 @@
-import { emptyState, today, addMonths, type Access, type State } from "./model";
+import { emptyState, today, addMonths, type Access, type State } from "./model.js";
 export const demoAccess: Access = {
   tenant: {
     id: "demo-centro",

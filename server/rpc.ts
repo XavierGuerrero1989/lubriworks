@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z, ZodError } from "zod";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { admin } from "./firebase";
+import { admin } from "./firebase.js";
 import {
   assertAccess,
   key,
@@ -9,9 +9,9 @@ import {
   roles,
   type Member,
   type Tenant,
-} from "../shared/model";
-import { execute, type Command } from "../shared/engine";
-import { loadState, persistDiff } from "./store";
+} from "../shared/model.js";
+import { execute, type Command } from "../shared/engine.js";
+import { loadState, persistDiff } from "./store.js";
 const envelope = z.object({
   action: z.string().max(60),
   tenantId: key.optional(),

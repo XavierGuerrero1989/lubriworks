@@ -1,9 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import webpush from "web-push";
-import { admin } from "./firebase";
-import { respond } from "./rpc";
-import { dueInfo, type Reminder, type Vehicle } from "../shared/model";
+import { admin } from "./firebase.js";
+import { respond } from "./rpc.js";
+import { dueInfo, type Reminder, type Vehicle } from "../shared/model.js";
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 export function validCron(
   secret: string | undefined,

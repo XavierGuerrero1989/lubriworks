@@ -11,7 +11,7 @@ import {
   type Member,
   type State,
   type Vehicle,
-} from "./model";
+} from "./model.js";
 export type Command = { action: string; [key: string]: unknown };
 function requireThat(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);

@@ -51,3 +51,10 @@ Las pruebas de emulador no validan configuración de credenciales, IAM, dominios
 Por pedido explícito del titular para todas las empresas, se retiró el requisito de `emailVerified` en login, registro, API, asignación de miembros, alta de empresas y bootstrap. No se modifica el estado de verificación almacenado en Firebase. Se mantienen token válido con revocación comprobada, cuentas habilitadas, membresías explícitas, roles, aislamiento de tenants y reglas Firestore sin acceso directo. Las cuentas de las pruebas de API se crean con correo sin verificar para comprobar los flujos en esa condición.
 
 Build de producción aprobado y 26 pruebas de API/reglas en emuladores aprobadas con cuentas sin verificar, incluyendo alta de empresas y rechazo de cuentas deshabilitadas. La cuenta solicitada por el usuario quedó vinculada como owner de `lubricentro-demo`, con índice de acceso y auditoría.
+
+
+## Ingreso con un único lubricentro — 7 de octubre de 2026
+
+Una cuenta común con una única membresía entra directamente a su lubricentro después del login o al restaurar la sesión. El número de sucursales no interviene. Se conserva el selector para múltiples empresas y el ingreso del superadmin a plataforma. Al abrir los accesos operativos desde plataforma también se abre directamente la única empresa. La carga conserva comprobaciones de generación y cancelación para evitar datos de una sesión anterior; un fallo de carga ofrece reintento sin selector para cuentas con un único acceso.
+
+Build aprobado. Revisión local del componente App real con autenticación y datos ficticios: una empresa con dos sucursales abrió Inicio; dos empresas mostraron el selector; un fallo simulado mostró error y Reintentar.

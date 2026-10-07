@@ -54,6 +54,8 @@ export default function App() {
           setAccess(result.access);
           setPlatform(result.platform);
           setShowPlatform(result.platform);
+          if (!result.platform && result.access.length === 1)
+            await select(result.access[0]);
         }
       } catch (e) {
         if (current === generation.current) setError((e as Error).message);
@@ -130,6 +132,7 @@ export default function App() {
       setState(projectState(demoDb.current[a.tenant.id], a.member));
       return;
     }
+    setLoading(true);
     controller.current = new AbortController();
     try {
       const result = await rpc<{
@@ -150,6 +153,8 @@ export default function App() {
         setState(null);
         setError((e as Error).message);
       }
+    } finally {
+      if (current === generation.current) setLoading(false);
     }
   };
   const run = async (cmd: Command) => {
@@ -217,7 +222,7 @@ export default function App() {
     return (
       <div className="full-loader">
         <div className="spinner" />
-        Verificando tu acceso…
+        {active ? "Cargando lubricentro…" : "Verificando tu acceso…"}
       </div>
     );
   if (!demo && !user) return <Login onDemo={startDemo} />;
@@ -262,8 +267,9 @@ export default function App() {
           const current = generation.current;
           const result = await rpc<{ access: Access[] }>("access");
           if (current !== generation.current) return;
-          clear();
           setAccess(result.access);
+          if (result.access.length === 1) await select(result.access[0]);
+          else clear();
         }}
         onOpenTenant={async (id) => {
           const current = generation.current;
@@ -278,6 +284,35 @@ export default function App() {
           await select(match);
         }}
       />
+    );
+  if (active && error && access.length === 1)
+    return (
+      <main className="access-page">
+        <img src="/brand/logo.png" alt="LubriWorks" />
+        <section className="panel empty">
+          <h1>No pudimos abrir tu lubricentro</h1>
+          <p className="error" role="alert">
+            {error}
+          </p>
+          <button className="button primary" onClick={() => select(access[0])}>
+            Reintentar
+          </button>
+          {platform && (
+            <button
+              className="button secondary"
+              onClick={() => {
+                clear();
+                setShowPlatform(true);
+              }}
+            >
+              Volver al panel de superadministrador
+            </button>
+          )}
+          <button className="button secondary" onClick={logout}>
+            Cerrar sesión
+          </button>
+        </section>
+      </main>
     );
   return (
     <main className="access-page">

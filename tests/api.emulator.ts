@@ -9,7 +9,8 @@ let server: Server,
   base = "",
   ownerToken = "",
   clientToken = "",
-  otherToken = "";
+  otherToken = "",
+  platformToken = "";
 async function call(
   token: string,
   action: string,
@@ -58,21 +59,21 @@ beforeAll(async () => {
     );
     return (await r.json()).idToken as string;
   }
-  [ownerToken, clientToken, otherToken] = await Promise.all([
+  [ownerToken, clientToken, otherToken, platformToken] = await Promise.all([
     user("owner"),
     user("client"),
     user("other"),
+    user("platform"),
   ]);
+  await db.doc("platformAdmins/platform").set({ active: true });
   for (const tenantId of ["alpha", "beta"]) {
-    await db
-      .doc(`tenants/${tenantId}`)
-      .set({
-        id: tenantId,
-        name: tenantId,
-        active: true,
-        schemaVersion: 1,
-        createdAt: new Date().toISOString(),
-      });
+    await db.doc(`tenants/${tenantId}`).set({
+      id: tenantId,
+      name: tenantId,
+      active: true,
+      schemaVersion: 1,
+      createdAt: new Date().toISOString(),
+    });
     await db
       .doc(
         `tenants/${tenantId}/members/${tenantId === "alpha" ? "owner" : "other"}`,
@@ -93,17 +94,15 @@ beforeAll(async () => {
         batch.set(db.doc(`tenants/${tenantId}/${col}/${row.id}`), row);
     await batch.commit();
   }
-  await db
-    .doc("tenants/alpha/members/client")
-    .set({
-      tenantId: "alpha",
-      uid: "client",
-      role: "customer",
-      active: true,
-      name: "Client",
-      email: "client@test.local",
-      customerId: "c1",
-    });
+  await db.doc("tenants/alpha/members/client").set({
+    tenantId: "alpha",
+    uid: "client",
+    role: "customer",
+    active: true,
+    name: "Client",
+    email: "client@test.local",
+    customerId: "c1",
+  });
   await db.doc("userTenants/owner/tenants/alpha").set({ tenantId: "alpha" });
   // A forged index must not grant access.
   await db.doc("userTenants/owner/tenants/beta").set({ tenantId: "beta" });
@@ -293,4 +292,110 @@ describe("real API + Auth / Firestore emulators", () => {
     expect((await fetch(base + "/cron")).status).toBe(401));
   it("denies platform actions to a tenant owner", async () =>
     expect((await call(ownerToken, "platform.list")).status).toBe(403));
+  it("limits the platform directory to platform administrators", async () => {
+    for (const action of [
+      "platform.overview",
+      "platform.team",
+      "platform.member.save",
+    ])
+      expect((await call(ownerToken, action, { id: "alpha" })).status).toBe(
+        403,
+      );
+  });
+  it("returns real tenant metrics and grants no operational membership", async () => {
+    const result = await call(platformToken, "platform.overview");
+    expect(result.status).toBe(200);
+    expect(result.data.totalTenants).toBe(2);
+    expect(
+      result.data.tenants.find((t: any) => t.id === "alpha").vehicles,
+    ).toBe(demoState().vehicles.length);
+    expect((await call(platformToken, "snapshot")).status).toBe(400);
+  });
+  it("lists only the selected company team", async () => {
+    const result = await call(platformToken, "platform.team", { id: "beta" });
+    expect(result.status).toBe(200);
+    expect(result.data.members.every((m: any) => m.tenantId === "beta")).toBe(
+      true,
+    );
+    expect(result.data.members.some((m: any) => m.uid === "client")).toBe(
+      false,
+    );
+  });
+  it("audits platform access changes without modifying other tenants", async () => {
+    const result = await call(platformToken, "platform.member.save", {
+      id: "alpha",
+      email: "other@test.local",
+      name: "Other",
+      role: "technician",
+      active: true,
+      customerId: null,
+    });
+    expect(result.status).toBe(200);
+    const { db } = admin();
+    expect(
+      (await db.doc("tenants/alpha/members/other").get()).data()?.role,
+    ).toBe("technician");
+    expect(
+      (await db.doc("tenants/beta/members/other").get()).data()?.role,
+    ).toBe("owner");
+    expect((await db.doc("userTenants/other/tenants/alpha").get()).exists).toBe(
+      true,
+    );
+    expect(
+      (
+        await db
+          .collection("tenants/alpha/audit")
+          .where("action", "==", "platform.member.save")
+          .get()
+      ).empty,
+    ).toBe(false);
+  });
+  it("preserves the last administrator and rejects invalid client links", async () => {
+    const payload = {
+      id: "alpha",
+      email: "owner@test.local",
+      name: "Owner",
+      role: "technician",
+      active: true,
+      customerId: null,
+    };
+    expect(
+      (await call(platformToken, "platform.member.save", payload)).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(platformToken, "platform.member.save", {
+          ...payload,
+          email: "other@test.local",
+          role: "customer",
+          customerId: "missing",
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(platformToken, "platform.member.save", {
+          ...payload,
+          email: "other@test.local",
+          expectedUid: "owner",
+        })
+      ).status,
+    ).toBe(400);
+  });
+  it("enforces platform revocation on every endpoint", async () => {
+    const { db } = admin();
+    await db.doc("platformAdmins/platform").update({ active: false });
+    try {
+      for (const action of [
+        "platform.overview",
+        "platform.team",
+        "platform.member.save",
+      ])
+        expect(
+          (await call(platformToken, action, { id: "alpha" })).status,
+        ).toBe(403);
+    } finally {
+      await db.doc("platformAdmins/platform").update({ active: true });
+    }
+  });
 });

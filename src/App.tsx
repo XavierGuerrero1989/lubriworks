@@ -6,13 +6,8 @@ import { Login } from "./components/Login";
 import { Workspace } from "./components/Workspace";
 import { demoAccess, demoState } from "../shared/demo";
 import { execute, type Command } from "../shared/engine";
-import {
-  projectState,
-  type Access,
-  type State,
-  type Tenant,
-} from "../shared/model";
-import { FormDialog, type Dialog } from "./components/ui";
+import { projectState, type Access, type State } from "../shared/model";
+import { Platform } from "./components/Platform";
 export default function App() {
   const [user, setUser] = useState<User | null>(null),
     [demo, setDemo] = useState(false),
@@ -23,9 +18,7 @@ export default function App() {
     [state, setState] = useState<State | null>(null),
     [error, setError] = useState(""),
     [vapid, setVapid] = useState(""),
-    [tenants, setTenants] = useState<Tenant[]>([]),
-    [showPlatform, setShowPlatform] = useState(false),
-    [dialog, setDialog] = useState<Dialog | null>(null);
+    [showPlatform, setShowPlatform] = useState(false);
   const pendingOperations = useRef(new Map<string, string>());
   const demoDb = useRef<Record<string, State>>({}),
     generation = useRef(0),
@@ -60,6 +53,7 @@ export default function App() {
         if (current === generation.current) {
           setAccess(result.access);
           setPlatform(result.platform);
+          setShowPlatform(result.platform);
         }
       } catch (e) {
         if (current === generation.current) setError((e as Error).message);
@@ -256,9 +250,33 @@ export default function App() {
         onPlatform={() => {
           clear();
           setShowPlatform(true);
-          void rpc<Tenant[]>("platform.list")
-            .then(setTenants)
-            .catch((e) => setError(e.message));
+        }}
+      />
+    );
+  if (platform && showPlatform)
+    return (
+      <Platform
+        key={user?.uid}
+        email={user?.email || ""}
+        onLogout={logout}
+        onAccesses={async () => {
+          const current = generation.current;
+          const result = await rpc<{ access: Access[] }>("access");
+          if (current !== generation.current) return;
+          clear();
+          setAccess(result.access);
+        }}
+        onOpenTenant={async (id) => {
+          const current = generation.current;
+          const result = await rpc<{ access: Access[] }>("access");
+          if (current !== generation.current) return;
+          const match = result.access.find((a) => a.tenant.id === id);
+          if (!match)
+            throw new Error(
+              "Tu cuenta no tiene una membresía operativa activa en esta empresa.",
+            );
+          setAccess(result.access);
+          await select(match);
         }}
       />
     );
@@ -267,15 +285,9 @@ export default function App() {
       <img src="/brand/logo.png" alt="LubriWorks" />
       <div className="access-top">
         <div>
-          <span className="eyebrow">
-            {showPlatform ? "BRAINWORKS · PLATAFORMA" : "TU ESPACIO DE TRABAJO"}
-          </span>
-          <h1>{showPlatform ? "Empresas" : "Elegí tu lubricentro"}</h1>
-          <p>
-            {showPlatform
-              ? "Administración de tenants y estado de acceso."
-              : "Cada empresa mantiene sus datos y permisos separados."}
-          </p>
+          <span className="eyebrow">TU ESPACIO DE TRABAJO</span>
+          <h1>Elegí tu lubricentro</h1>
+          <p>Cada empresa mantiene sus datos y permisos separados.</p>
         </div>
         <button className="button secondary" onClick={logout}>
           Cerrar sesión
@@ -287,127 +299,50 @@ export default function App() {
         </p>
       )}
       {active && !state && !error && <p>Cargando empresa…</p>}
-      {showPlatform ? (
-        <>
-          <button
-            className="button primary"
-            onClick={() =>
-              setDialog({
-                title: "Crear empresa",
-                fields: [
-                  {
-                    key: "id",
-                    label: "Identificador",
-                    hint: "Minúsculas y guiones. Ejemplo: lubricentro-central",
-                  },
-                  { key: "name", label: "Nombre comercial" },
-                  {
-                    key: "ownerEmail",
-                    label: "Correo del administrador",
-                    type: "email",
-                  },
-                ],
-                submit: async (data) => {
-                  await rpc("platform.create", data);
-                  setTenants(await rpc("platform.list"));
-                },
-              })
-            }
-          >
-            Nueva empresa
-          </button>
-          <div className="access-grid">
-            {tenants.map((t) => (
-              <article className="panel access-card" key={t.id}>
-                <h2>{t.name}</h2>
-                <p>
-                  {t.id} · {t.active ? "Activa" : "Suspendida"}
-                </p>
-                <button
-                  className="button secondary"
-                  onClick={() =>
-                    setDialog({
-                      title: t.active
-                        ? "Suspender empresa"
-                        : "Reactivar empresa",
-                      description: t.active
-                        ? "Todos sus usuarios perderán acceso mientras esté suspendida."
-                        : "Se restablecerá el acceso de los miembros activos.",
-                      fields: [],
-                      submit: async () => {
-                        await rpc("platform.status", {
-                          id: t.id,
-                          active: !t.active,
-                        });
-                        setTenants(await rpc("platform.list"));
-                      },
-                    })
-                  }
-                >
-                  {t.active ? "Suspender" : "Reactivar"}
-                </button>
-              </article>
-            ))}
-          </div>
-          <button
-            className="text-button"
-            onClick={async () => {
-              setShowPlatform(false);
-              const r = await rpc<{ access: Access[] }>("access");
-              setAccess(r.access);
-            }}
-          >
-            Volver a mis empresas
-          </button>
-        </>
-      ) : (
-        <>
-          <div className="access-grid">
-            {access.map((a) => (
-              <button
-                className="panel access-card"
-                key={a.tenant.id}
-                onClick={() => select(a)}
-              >
-                <span className="eyebrow">LUBRICENTRO</span>
-                <h2>{a.tenant.name}</h2>
-                <p>Ingresar →</p>
-              </button>
-            ))}
-          </div>
-          {!access.length && (
-            <div className="panel empty">
-              <h2>Tu cuenta está lista.</h2>
-              <p>
-                El administrador debe vincular tu correo a una empresa o ficha
-                de cliente.
-              </p>
-              <button
-                className="button secondary"
-                onClick={() => location.reload()}
-              >
-                Actualizar accesos
-              </button>
-            </div>
-          )}
-          {platform && (
-            <button
-              className="button secondary"
-              onClick={async () => {
-                setShowPlatform(true);
-                try {
-                  setTenants(await rpc("platform.list"));
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            >
-              Administrar plataforma
-            </button>
-          )}
-        </>
+      {platform && (
+        <button
+          className="button primary"
+          onClick={() => {
+            clear();
+            setShowPlatform(true);
+          }}
+        >
+          Volver al panel de superadministrador
+        </button>
       )}
-      {dialog && <FormDialog dialog={dialog} onClose={() => setDialog(null)} />}
+      <div className="access-grid">
+        {access.map((a) => (
+          <button
+            className="panel access-card"
+            key={a.tenant.id}
+            onClick={() => select(a)}
+          >
+            <span className="eyebrow">LUBRICENTRO</span>
+            <h2>{a.tenant.name}</h2>
+            <p>Ingresar →</p>
+          </button>
+        ))}
+      </div>
+      {!access.length && (
+        <div className="panel empty">
+          <h2>
+            {platform
+              ? "Todavía no tenés accesos operativos."
+              : "Tu cuenta está lista."}
+          </h2>
+          <p>
+            {platform
+              ? "Creá una empresa desde el panel y asigná tu cuenta como administrador para ingresar a su operación."
+              : "El administrador debe vincular tu correo a una empresa o ficha de cliente."}
+          </p>
+          <button
+            className="button secondary"
+            onClick={() => location.reload()}
+          >
+            Actualizar accesos
+          </button>
+        </div>
+      )}
     </main>
   );
 }

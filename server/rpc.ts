@@ -1,3 +1,4 @@
+import { overview, team, saveMember } from "./platform.js";
 import { createHash } from "node:crypto";
 import { z, ZodError } from "zod";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -105,6 +106,12 @@ export default async function handler(
     if (action.startsWith("platform.")) {
       if ((await db.doc(`platformAdmins/${uid}`).get()).data()?.active !== true)
         return respond(res, 403, { error: "Acceso de plataforma requerido." });
+      if (action === "platform.overview")
+        return respond(res, 200, await overview(db, uid, payload));
+      if (action === "platform.team")
+        return respond(res, 200, await team(db, uid, payload));
+      if (action === "platform.member.save")
+        return respond(res, 200, await saveMember(db, auth, uid, payload));
       if (action === "platform.list") {
         const tenants = await db.collection("tenants").limit(200).get();
         return respond(
@@ -122,7 +129,7 @@ export default async function handler(
           })
           .parse(payload);
         const owner = await auth.getUserByEmail(data.ownerEmail);
-        if (!owner.emailVerified)
+        if (!owner.emailVerified || owner.disabled)
           throw new Error(
             "El administrador debe registrar y verificar su correo primero.",
           );

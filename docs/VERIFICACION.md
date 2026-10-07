@@ -31,4 +31,16 @@ Las pruebas de emulador no validan configuración de credenciales, IAM, dominios
 - API sin sesión: HTTP 401. Cron sin credencial: HTTP 401.
 - Cron autorizado: HTTP 200, `completed: true`, `pushConfigured: true`, cero notificaciones y cero envíos (sin datos elegibles de clientes). Confirma conexión real con Firebase Admin y Firestore.
 - Build y comprobación de arranque sin require(ESM) aprobados; 33 pruebas de negocio y 18 de API/reglas en emuladores aprobadas. npm audit: cero vulnerabilidades.
-- Falta designar la cuenta inicial de superadministrador, crear el primer tenant y probar recepción push en un dispositivo con consentimiento.
+- Cuenta inicial de superadministrador designada y verificada. Falta crear el primer tenant y probar recepción push en un dispositivo con consentimiento.
+
+
+## Consola de superadministración — 7 de octubre de 2026
+
+- Estructura basada en los paneles existentes de BrainFleet y BrainRetail: Resumen, Empresas y usuarios, Soporte, Auditoría y Ayuda. Identidad visual propia de LubriWorks.
+- Las cuentas de plataforma entran directamente al resumen después del login; pueden volver a sus accesos operativos y regresar a la consola.
+- Indicadores reales de Firestore: cantidad global de empresas activas/suspendidas; membresías, clientes, vehículos y órdenes de las empresas de la página. Paginación de 50 empresas y alcance indicado en pantalla.
+- Alta y suspensión/reactivación de empresas, consulta de equipos y asignación/edición de roles por empresa. Cuentas existentes, habilitadas y con correo verificado. Protección del último administrador activo, vínculo de cliente dentro del mismo tenant y auditoría de cambios.
+- Soporte ofrece diagnóstico de accesos. Abrir una operación requiere una membresía activa propia; no incluye suplantación de cuentas ni sesiones de edición como soporte.
+- Auditoría muestra hasta 40 eventos recientes, con un máximo de 8 por empresa de la página. El directorio de miembros/clientes admite hasta 2000 registros por empresa y muestra un error explícito si requiere paginación adicional.
+- Build de producción y comprobación de runtime aprobados. 33 pruebas de dominio y 24 pruebas de API/reglas con Firebase emulado aprobadas (57 en total). Las nuevas pruebas cubren permisos de plataforma, indicadores, aislamiento del directorio, asignación de roles, último administrador y revocación.
+- Revisión visual de escritorio (1440 px) y móvil (390 px) usando el componente real con datos de ejemplo en un entorno local separado. Las capturas `platform-desktop-preview.jpg` y `platform-mobile-preview.jpg` contienen datos de ejemplo; no representan empresas de producción.

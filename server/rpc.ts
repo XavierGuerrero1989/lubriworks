@@ -66,10 +66,6 @@ export default async function handler(
         error: "La sesión venció. Volvé a ingresar.",
       });
     }
-    if (!identity.email_verified)
-      return respond(res, 403, {
-        error: "Verificá tu correo antes de ingresar.",
-      });
     const uid = key.parse(identity.uid);
     const { action, tenantId, operationId, payload } = envelope.parse(
       await readJson(req),
@@ -129,10 +125,8 @@ export default async function handler(
           })
           .parse(payload);
         const owner = await auth.getUserByEmail(data.ownerEmail);
-        if (!owner.emailVerified || owner.disabled)
-          throw new Error(
-            "El administrador debe registrar y verificar su correo primero.",
-          );
+        if (owner.disabled)
+          throw new Error("La cuenta del administrador debe estar habilitada.");
         await db.runTransaction(async (tx) => {
           const t = db.doc(`tenants/${data.id}`);
           const [old, platform] = await Promise.all([
@@ -251,10 +245,8 @@ export default async function handler(
         })
         .parse(payload);
       const user = await auth.getUserByEmail(data.email);
-      if (!user.emailVerified)
-        throw new Error(
-          "El usuario debe registrar y verificar su correo primero.",
-        );
+      if (user.disabled)
+        throw new Error("La cuenta del usuario debe estar habilitada.");
       await db.runTransaction(async (tx) => {
         const [t, m, team, customer] = await Promise.all([
           tx.get(tref),

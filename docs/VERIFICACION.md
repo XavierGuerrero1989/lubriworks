@@ -44,3 +44,10 @@ Las pruebas de emulador no validan configuración de credenciales, IAM, dominios
 - Auditoría muestra hasta 40 eventos recientes, con un máximo de 8 por empresa de la página. El directorio de miembros/clientes admite hasta 2000 registros por empresa y muestra un error explícito si requiere paginación adicional.
 - Build de producción y comprobación de runtime aprobados. 33 pruebas de dominio y 24 pruebas de API/reglas con Firebase emulado aprobadas (57 en total). Las nuevas pruebas cubren permisos de plataforma, indicadores, aislamiento del directorio, asignación de roles, último administrador y revocación.
 - Revisión visual de escritorio (1440 px) y móvil (390 px) usando el componente real con datos de ejemplo en un entorno local separado. Las capturas `platform-desktop-preview.jpg` y `platform-mobile-preview.jpg` contienen datos de ejemplo; no representan empresas de producción.
+
+
+## Acceso sin verificación de correo — 7 de octubre de 2026
+
+Por pedido explícito del titular para todas las empresas, se retiró el requisito de `emailVerified` en login, registro, API, asignación de miembros, alta de empresas y bootstrap. No se modifica el estado de verificación almacenado en Firebase. Se mantienen token válido con revocación comprobada, cuentas habilitadas, membresías explícitas, roles, aislamiento de tenants y reglas Firestore sin acceso directo. Las cuentas de las pruebas de API se crean con correo sin verificar para comprobar los flujos en esa condición.
+
+Build de producción aprobado y 26 pruebas de API/reglas en emuladores aprobadas con cuentas sin verificar, incluyendo alta de empresas y rechazo de cuentas deshabilitadas. La cuenta solicitada por el usuario quedó vinculada como owner de `lubricentro-demo`, con índice de acceso y auditoría.

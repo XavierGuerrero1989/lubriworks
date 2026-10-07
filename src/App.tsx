@@ -40,7 +40,7 @@ export default function App() {
       setUser(u);
       setAccess([]);
       setPlatform(false);
-      if (!u || !u.emailVerified) {
+      if (!u) {
         setLoading(false);
         return;
       }
@@ -220,8 +220,7 @@ export default function App() {
         Verificando tu acceso…
       </div>
     );
-  if (!demo && (!user || !user.emailVerified))
-    return <Login onDemo={startDemo} />;
+  if (!demo && !user) return <Login onDemo={startDemo} />;
   if (active && state)
     return (
       <Workspace

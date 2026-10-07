@@ -124,10 +124,7 @@ export async function saveMember(
   const user = await auth.getUserByEmail(data.email);
   if (data.expectedUid && user.uid !== data.expectedUid)
     throw new Error("Para editar un acceso conservá el correo de esa cuenta.");
-  if (!user.emailVerified || user.disabled)
-    throw new Error(
-      "La cuenta debe estar habilitada y tener el correo verificado.",
-    );
+  if (user.disabled) throw new Error("La cuenta debe estar habilitada.");
   await db.runTransaction(async (tx) => {
     const ref = db.doc(`tenants/${data.id}`);
     const [admin, t, members, customer] = await Promise.all([

@@ -3,9 +3,9 @@ const email = process.argv[2];
 if (!email) throw new Error("Uso: npm run bootstrap -- admin@dominio.com");
 const { auth, db } = admin();
 const user = await auth.getUserByEmail(email);
-if (!user.emailVerified)
+if (user.disabled)
   throw new Error(
-    "Registrá y verificá el correo antes de habilitar la plataforma.",
+    "La cuenta debe estar habilitada antes de habilitar la plataforma.",
   );
 await db
   .doc(`platformAdmins/${user.uid}`)

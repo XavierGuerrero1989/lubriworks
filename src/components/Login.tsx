@@ -1,10 +1,8 @@
 import { useState } from "react";
 import {
   createUserWithEmailAndPassword,
-  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  signOut,
 } from "firebase/auth";
 import {
   ArrowRight,
@@ -73,7 +71,7 @@ export function Login({ onDemo }: { onDemo: () => void }) {
           </h2>
           <p>
             {mode === "register"
-              ? "Después de verificar tu correo, el lubricentro podrá vincularte a tus vehículos."
+              ? "Creá tu cuenta y el lubricentro podrá vincularte a tus vehículos."
               : "Ingresá para continuar con tu día."}
           </p>
           <form
@@ -96,30 +94,9 @@ export function Login({ onDemo }: { onDemo: () => void }) {
                     "Si existe una cuenta con ese correo, recibirás instrucciones para recuperar el acceso.",
                   );
                 } else if (mode === "register") {
-                  const result = await createUserWithEmailAndPassword(
-                    auth,
-                    email,
-                    password,
-                  );
-                  await sendEmailVerification(result.user);
-                  await signOut(auth);
-                  setMessage(
-                    "Revisá tu correo, verificá la cuenta y luego ingresá.",
-                  );
-                  setMode("login");
+                  await createUserWithEmailAndPassword(auth, email, password);
                 } else {
-                  const result = await signInWithEmailAndPassword(
-                    auth,
-                    email,
-                    password,
-                  );
-                  if (!result.user.emailVerified) {
-                    await sendEmailVerification(result.user);
-                    await signOut(auth);
-                    throw new Error(
-                      "Te enviamos un correo de verificación. Confirmalo antes de ingresar.",
-                    );
-                  }
+                  await signInWithEmailAndPassword(auth, email, password);
                 }
               } catch (e) {
                 const code = (e as any).code;

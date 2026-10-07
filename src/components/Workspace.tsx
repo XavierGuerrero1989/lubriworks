@@ -1686,7 +1686,7 @@ export function Workspace({
             <div className="settings-body">
               <ShieldCheck size={28} />
               <p>
-                Los usuarios se registran y verifican su correo. Después
+                Los usuarios se registran con correo y contraseña. Después
                 vinculás su acceso a esta empresa.
               </p>
               <p>
@@ -1700,7 +1700,7 @@ export function Workspace({
                       setDialog({
                         title: "Vincular o actualizar acceso",
                         description:
-                          "Usá un correo ya registrado y verificado. Para modificar un acceso, ingresá el mismo correo.",
+                          "Usá un correo ya registrado. Para modificar un acceso, ingresá el mismo correo.",
                         fields: [
                           field("email", "Correo de acceso", "email"),
                           field("name", "Nombre"),

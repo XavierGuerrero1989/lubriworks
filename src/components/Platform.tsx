@@ -155,7 +155,7 @@ export function Platform({
     setDialog({
       title: "Nuevo lubricentro",
       description:
-        "El responsable debe tener una cuenta de Firebase con correo verificado.",
+        "El responsable debe tener una cuenta de Firebase habilitada.",
       submitLabel: "Crear empresa",
       fields: [
         { key: "name", label: "Nombre comercial" },
@@ -185,7 +185,7 @@ export function Platform({
     setDialog({
       title: m ? "Editar acceso" : "Asignar acceso",
       description:
-        "Vinculá una cuenta existente y verificada. Los roles se aplican sólo a esta empresa.",
+        "Vinculá una cuenta existente y habilitada. Los roles se aplican sólo a esta empresa.",
       fields: [
         {
           key: "email",
@@ -858,7 +858,7 @@ export function Platform({
                 <li>
                   <strong>Creá un lubricentro.</strong> En Empresas y usuarios,
                   indicá nombre, identificador y correo del administrador
-                  verificado.
+                  registrado.
                 </li>
                 <li>
                   <strong>Gestioná sus accesos.</strong> Seleccioná una empresa

@@ -44,23 +44,23 @@ Para generar las claves push: `npm run vapid`. Hacerlo localmente y copiar la pr
 
 Para generar `CRON_SECRET`, usar un generador criptográfico de contraseñas o `openssl rand -hex 32` localmente. Guardar el valor sólo en las variables del servidor.
 
-5. Desplegar, agregar ese dominio a Firebase Auth y comprobar registro, verificación de correo e ingreso.
+5. Desplegar, agregar ese dominio a Firebase Auth y comprobar registro e ingreso.
 6. Revisar los logs de las funciones `/api/rpc` y `/api/reminders`.
 
 Las claves VAPID y `CRON_SECRET` se generaron y cargaron en Production. El contacto Web Push es `mailto:xavier@brainworks.ar`. El cron está habilitado. En el plan Hobby se ejecuta dentro de una ventana de una hora desde las 12:00 UTC (09:00–10:00 Argentina). La entrega a un dispositivo real requiere primero crear la cuenta, el tenant y una suscripción push.
 
 ## 3. Primer administrador y primer tenant
 
-1. Registrarte en la app desplegada y verificar el correo.
+1. Registrarte en la app desplegada.
 2. Para el alta inicial, crear en la consola de Firestore el documento **`platformAdmins/UID_DE_TU_USUARIO`**, con `active: true` de tipo booleano. El UID se obtiene desde Authentication → Users. Es una operación de administración de plataforma, no algo que deba poder hacer cualquier usuario.
-3. Alternativa para el operador del proyecto: completar `.env.local` en privado y ejecutar `npm run bootstrap -- tu-correo@dominio.com`. La cuenta tiene que existir y estar verificada.
+3. Alternativa para el operador del proyecto: completar `.env.local` en privado y ejecutar `npm run bootstrap -- tu-correo@dominio.com`. La cuenta tiene que existir y estar habilitada.
 4. Volver a ingresar. Abrir **Administrar plataforma → Nueva empresa**. Definir identificador, nombre y correo del administrador (puede ser tu mismo correo).
 5. Volver a **Mis empresas** e ingresar al lubricentro.
 6. Cargar sucursales, productos, servicios, clientes y vehículos. Abrir caja antes del primer cobro.
 
 ## 4. Dar acceso a un cliente o empleado
 
-1. La persona crea su cuenta con correo y contraseña, y verifica el correo.
+1. La persona crea su cuenta con correo y contraseña.
 2. El administrador abre **Configuración → Gestionar un acceso**.
 3. Completa el correo registrado, nombre y rol.
 4. Para rol **Cliente**, selecciona su ficha de cliente. Para empleados, la ficha queda vacía.

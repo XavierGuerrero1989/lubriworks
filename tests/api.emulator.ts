@@ -43,7 +43,7 @@ beforeAll(async () => {
       uid,
       email: `${uid}@test.local`,
       password: "TestPassword123!",
-      emailVerified: true,
+      emailVerified: false,
     });
     const r = await fetch(
       `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake`,
@@ -397,5 +397,56 @@ describe("real API + Auth / Firestore emulators", () => {
     } finally {
       await db.doc("platformAdmins/platform").update({ active: true });
     }
+  });
+  it("creates a tenant for an enabled owner without email verification", async () => {
+    const result = await call(platformToken, "platform.create", {
+      id: "unverified-demo",
+      name: "Unverified account demo",
+      ownerEmail: "owner@test.local",
+    });
+    expect(result.status).toBe(200);
+    const { db, auth } = admin();
+    expect((await auth.getUser("owner")).emailVerified).toBe(false);
+    expect(
+      (await db.doc("tenants/unverified-demo/members/owner").get()).data()
+        ?.role,
+    ).toBe("owner");
+    expect(
+      (await call(ownerToken, "snapshot", {}, "unverified-demo")).status,
+    ).toBe(200);
+  });
+  it("still rejects disabled accounts for tenant creation and member assignment", async () => {
+    const { auth } = admin();
+    await auth.createUser({
+      uid: "disabled",
+      email: "disabled@test.local",
+      disabled: true,
+      emailVerified: false,
+    });
+    expect(
+      (
+        await call(platformToken, "platform.create", {
+          id: "disabled-demo",
+          name: "Disabled account demo",
+          ownerEmail: "disabled@test.local",
+        })
+      ).status,
+    ).toBe(400);
+    const payload = {
+      email: "disabled@test.local",
+      name: "Disabled user",
+      role: "technician",
+      active: true,
+      customerId: null,
+    };
+    expect(
+      (
+        await call(platformToken, "platform.member.save", {
+          ...payload,
+          id: "alpha",
+        })
+      ).status,
+    ).toBe(400);
+    expect((await call(ownerToken, "member.save", payload)).status).toBe(400);
   });
 });

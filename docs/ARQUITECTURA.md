@@ -57,7 +57,7 @@ Los roles se consultan en Firestore en cada operación; no se confía en un camp
 - La agenda admite un turno por horario exacto y sucursal; no calcula duración ni disponibilidad solapada de varios puestos.
 - Los combos usan productos específicos de sucursal; se crea otro combo para productos de otra sucursal.
 - Sin facturación fiscal/ARCA, pasarela de pago, devoluciones, cuentas corrientes, pagos a proveedores, envíos de WhatsApp, adjuntos ni migración de datos de otros productos. Los comprobantes son internos, no fiscales.
-- No se automatizan invitaciones por email: la persona se registra, verifica correo y un administrador la vincula explícitamente.
+- No se automatizan invitaciones por email: la persona se registra y un administrador la vincula explícitamente.
 - El stock se descuenta al finalizar el servicio; se factura/cobra después. Las órdenes cerradas son inmutables. Las correcciones de stock se hacen con movimientos auditados, no editando el número.
 - El inventario de esta etapa permite ajustes y recepción; no incluye transferencias entre sucursales.
 - Sin backups programados, alertas externas ni restauración automatizada configurados. Definirlos en Firebase antes de operar con datos que requieran recuperación.

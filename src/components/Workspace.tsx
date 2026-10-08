@@ -1,3 +1,9 @@
+import { auth } from "../lib/firebase";
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+} from "firebase/auth";
 import { Notifications } from "./Notifications";
 import { useState, type ReactNode } from "react";
 import {
@@ -203,6 +209,16 @@ export function Workspace({
       fields = [
         field("name", "Nombre y apellido"),
         field("email", "Correo electrónico", "email"),
+        ...(!record
+          ? [
+              field("password", "Contraseña de acceso", "password", {
+                minLength: 8,
+                maxLength: 128,
+                autoComplete: "new-password",
+                hint: "Al menos 8 caracteres. El cliente podrá cambiarla desde su perfil.",
+              }),
+            ]
+          : []),
         field("phone", "Teléfono", "tel", { required: false }),
         field("notes", "Notas internas", "textarea", { required: false }),
       ];
@@ -352,9 +368,14 @@ export function Workspace({
     setDialog({
       title: `${record ? "Editar" : "Nuevo registro"} · ${{ branches: "Sucursal", customers: "Cliente", vehicles: "Vehículo", products: "Producto", suppliers: "Proveedor", services: "Servicio", appointments: "Turno", orders: "Orden de servicio", purchases: "Compra" }[collection]}`,
       fields,
+      description:
+        collection === "customers" && !record
+          ? "Al guardar se crea su cuenta de acceso con este correo y contraseña, sin verificación de correo."
+          : undefined,
       submit: async (values) => {
         let data = { ...d, ...values };
         delete data.id;
+        delete data.password;
         if (collection === "vehicles") {
           data.previousOdometer = d.previousOdometer ?? null;
           data.previousReadingDate = d.previousReadingDate || "";
@@ -379,7 +400,11 @@ export function Workspace({
           };
         }
         if (collection === "purchases") data.status = "draft";
-        await execute({ action: "save", collection, id: record?.id, data });
+        await execute(
+          collection === "customers" && !record
+            ? { action: "createCustomer", data, password: values.password }
+            : { action: "save", collection, id: record?.id, data },
+        );
       },
     });
   }
@@ -1944,6 +1969,8 @@ export function Workspace({
                   .join("")}
               </div>
               <dl>
+                <dt>Correo de acceso</dt>
+                <dd>{auth?.currentUser?.email || c.email}</dd>
                 <dt>Correo de la ficha</dt>
                 <dd>{c.email}</dd>
                 <dt>Teléfono</dt>
@@ -1977,6 +2004,69 @@ export function Workspace({
                 }
               >
                 Editar mis datos
+              </button>
+              <button
+                className="button"
+                onClick={() =>
+                  setDialog({
+                    title: "Cambiar contraseña",
+                    description:
+                      "Confirmá tu contraseña actual y elegí la nueva. No se envía verificación por correo.",
+                    fields: [
+                      field(
+                        "currentPassword",
+                        "Contraseña actual",
+                        "password",
+                        { autoComplete: "current-password" },
+                      ),
+                      field("newPassword", "Nueva contraseña", "password", {
+                        minLength: 8,
+                        maxLength: 128,
+                        autoComplete: "new-password",
+                      }),
+                      field(
+                        "confirmPassword",
+                        "Repetir nueva contraseña",
+                        "password",
+                        {
+                          minLength: 8,
+                          maxLength: 128,
+                          autoComplete: "new-password",
+                        },
+                      ),
+                    ],
+                    submit: async (data) => {
+                      if (demo)
+                        throw new Error(
+                          "El cambio de contraseña está disponible con una cuenta real.",
+                        );
+                      if (data.newPassword !== data.confirmPassword)
+                        throw new Error("Las nuevas contraseñas no coinciden.");
+                      if (String(data.newPassword).length < 8)
+                        throw new Error("Usá al menos 8 caracteres.");
+                      const user = auth?.currentUser;
+                      if (!user?.email)
+                        throw new Error("Volvé a iniciar sesión.");
+                      try {
+                        await reauthenticateWithCredential(
+                          user,
+                          EmailAuthProvider.credential(
+                            user.email,
+                            data.currentPassword,
+                          ),
+                        );
+                        await updatePassword(user, data.newPassword);
+                        setNotice("Contraseña actualizada.");
+                      } catch {
+                        throw new Error(
+                          "No se pudo cambiar la contraseña. Revisá la contraseña actual e intentá nuevamente.",
+                        );
+                      }
+                    },
+                  })
+                }
+              >
+                Cambiar contraseña
               </button>
             </div>
           </Section>

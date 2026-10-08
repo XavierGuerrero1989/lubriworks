@@ -161,7 +161,9 @@ export default function App() {
       const next = execute(
         demoDb.current[scope.tenant.id],
         scope.member,
-        cmd,
+        cmd.action === "createCustomer"
+          ? { action: "save", collection: "customers", data: cmd.data }
+          : cmd,
         operationId,
       );
       demoDb.current[scope.tenant.id] = next;
@@ -170,7 +172,7 @@ export default function App() {
       return;
     }
     await rpc(
-      "command",
+      cmd.action === "createCustomer" ? "customer.create" : "command",
       cmd,
       scope.tenant.id,
       controller.current?.signal,

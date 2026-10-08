@@ -118,6 +118,9 @@ export type Field = {
   max?: number;
   hint?: string;
   step?: string;
+  minLength?: number;
+  maxLength?: number;
+  autoComplete?: string;
 };
 export type Dialog = {
   title: string;
@@ -237,6 +240,9 @@ export function FormDialog({
                       autoFocus={i === 0}
                       name={f.key}
                       type={f.type || "text"}
+                      minLength={f.minLength}
+                      maxLength={f.maxLength}
+                      autoComplete={f.autoComplete}
                       required={f.required !== false}
                       defaultValue={String(f.value ?? "")}
                       min={f.min ?? (f.type === "number" ? 0 : undefined)}

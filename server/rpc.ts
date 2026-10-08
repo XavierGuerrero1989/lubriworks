@@ -1,3 +1,4 @@
+import { createCustomerAccount } from "./customerAccounts.js";
 import { notificationRpc } from "./notifications.js";
 import { overview, team, saveMember } from "./platform.js";
 import { createHash } from "node:crypto";
@@ -200,6 +201,21 @@ export default async function handler(
       throw new Error("Acción desconocida.");
     }
     if (!tenantId) throw new Error("Seleccioná una empresa.");
+    if (action === "customer.create") {
+      if (!operationId) throw new Error("Falta identificador de alta.");
+      return respond(
+        res,
+        200,
+        await createCustomerAccount(
+          db,
+          auth,
+          tenantId,
+          uid,
+          payload,
+          operationId,
+        ),
+      );
+    }
     if (action.startsWith("notifications."))
       return respond(
         res,

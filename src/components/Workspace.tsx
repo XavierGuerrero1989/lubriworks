@@ -1,3 +1,4 @@
+import { LubriAssistant } from "./LubriAssistant";
 import { auth } from "../lib/firebase";
 import {
   EmailAuthProvider,
@@ -2236,6 +2237,14 @@ export function Workspace({
           </footer>
         </main>
       </div>
+      {!dialog && !receipt && !mobile && (
+        <LubriAssistant
+          scope={customer ? "customer" : "staff"}
+          context={tab}
+          allowed={items.map(([id]) => id)}
+          onNavigate={go}
+        />
+      )}
       {receipt && (
         <Receipt
           sale={receipt}

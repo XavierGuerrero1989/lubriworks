@@ -1,3 +1,4 @@
+import { LubriAssistant } from "./LubriAssistant";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
@@ -934,6 +935,17 @@ export function Platform({
           )}
         </main>
       </div>
+      {!dialog && !mobile && (
+        <LubriAssistant
+          scope="platform"
+          context={section}
+          allowed={sections.map((s) => s.id)}
+          onNavigate={(id) => {
+            setSection(id);
+            setMobile(false);
+          }}
+        />
+      )}
       {dialog && <FormDialog dialog={dialog} onClose={() => setDialog(null)} />}
     </div>
   );

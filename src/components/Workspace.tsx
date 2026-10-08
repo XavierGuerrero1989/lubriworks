@@ -1,3 +1,4 @@
+import { Notifications } from "./Notifications";
 import { useState, type ReactNode } from "react";
 import {
   LayoutDashboard,
@@ -66,6 +67,7 @@ type Props = {
   accesses: Access[];
   state: State;
   run: (cmd: Command) => Promise<void>;
+  onRefresh: () => Promise<void>;
   onSwitch: (a: Access) => void;
   onLogout: () => void;
   demo: boolean;
@@ -84,6 +86,7 @@ const nav = [
   ["purchases", "Compras y proveedores", Truck],
   ["services", "Servicios y precios", Wrench],
   ["reports", "Reportes", BarChart3],
+  ["notifications", "Notificaciones", Bell],
   ["settings", "Configuración", Settings],
 ] as const;
 const clientNav = [
@@ -99,6 +102,7 @@ export function Workspace({
   state: s,
   run,
   onSwitch,
+  onRefresh,
   onLogout,
   demo,
   vapid,
@@ -143,7 +147,9 @@ export function Workspace({
               "services",
             ].includes(id)
           : access.member.role === "cashier"
-            ? !["purchases", "reports", "settings"].includes(id)
+            ? !["purchases", "reports", "settings", "notifications"].includes(
+                id,
+              )
             : true,
       );
   const title = items.find(([id]) => id === tab)?.[1] || "Inicio";
@@ -1901,72 +1907,21 @@ export function Workspace({
     );
   else if (tab === "notifications")
     content = (
-      <>
-        <div className="page-heading">
-          <div>
-            <h1>Notificaciones</h1>
-            <p>Avisos de tu lubricentro, también disponibles acá.</p>
-          </div>
-          <button
-            className="button primary"
-            onClick={async () => {
-              try {
-                if (demo)
-                  throw new Error(
-                    "El envío push se habilita al conectar Firebase y las claves VAPID.",
-                  );
-                await enablePush(access.tenant.id, vapid);
-                setNotice("Notificaciones activadas para este dispositivo.");
-              } catch (e) {
-                setNotice((e as Error).message);
-              }
-            }}
-          >
-            <Bell size={17} />
-            Activar recordatorios
-          </button>
-        </div>
-        <p className="info-box">
-          En iPhone: Compartir → Agregar a Inicio. Abrí LubriWorks desde ese
-          ícono y activá los recordatorios.
-        </p>
-        <Section title="Tu bandeja">
-          {s.notifications.length ? (
-            <div className="notification-list">
-              {s.notifications
-                .slice()
-                .reverse()
-                .map((n) => (
-                  <article className={n.read ? "" : "unread"} key={n.id}>
-                    <i>
-                      <Bell size={20} />
-                    </i>
-                    <div>
-                      <h3>{n.title}</h3>
-                      <p>{n.body}</p>
-                      <small>{fmtDate(n.date)}</small>
-                    </div>
-                    {!n.read && (
-                      <button
-                        className="text-button"
-                        onClick={() =>
-                          action("Marcar como leído", {
-                            action: "readNotice",
-                            id: n.id,
-                          })
-                        }
-                      >
-                        Marcar leído
-                      </button>
-                    )}
-                  </article>
-                ))}
-            </div>
-          ) : (
-            <Empty text="Todavía no tenés avisos." />
-          )}
-        </Section>
-      </>
+      <Notifications
+        access={access}
+        state={s}
+        demo={demo}
+        vapid={vapid}
+        onRead={(id) =>
+          action("Marcar como leído", { action: "readNotice", id })
+        }
+        onAppointment={requestAppointment}
+        onReading={(id) => {
+          const v = s.vehicles.find((v) => v.id === id);
+          if (v) readKm(v);
+        }}
+        onRefresh={onRefresh}
+      />
     );
   else if (tab === "profile") {
     const c = s.customers[0];

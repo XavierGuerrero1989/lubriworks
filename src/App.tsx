@@ -224,6 +224,18 @@ export default function App() {
         accesses={access}
         state={state}
         run={run}
+        onRefresh={async () => {
+          if (demo) return;
+          const current = generation.current;
+          const result = await snapshot(
+            active.tenant.id,
+            controller.current?.signal,
+          );
+          if (current === generation.current) {
+            setActive(result.access);
+            setState(result.state);
+          }
+        }}
         onSwitch={select}
         onLogout={logout}
         demo={demo}

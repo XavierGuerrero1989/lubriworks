@@ -125,6 +125,12 @@ export function execute(
       );
     }
     if (data.branchId) find(s.branches, data.branchId, "Sucursal");
+    if (collection === "customers" && existing) {
+      if ((existing as any).notificationPreferences)
+        data.notificationPreferences = (
+          existing as any
+        ).notificationPreferences;
+    }
     if (collection === "customers" && existing && !manager) {
       data.notes = (existing as any).notes;
     }

@@ -1839,3 +1839,46 @@ td.numeric {
     page-break-inside: avoid;
   }
 }
+
+.notification-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+}
+.notification-form {
+  padding: 20px;
+  max-width: 760px;
+}
+.notification-form label {
+  display: block;
+  margin: 14px 0;
+}
+.notification-form input:not([type="checkbox"]),
+.notification-form select,
+.notification-form textarea {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  padding: 12px;
+  border: 1px solid #dce5e8;
+  border-radius: 10px;
+  font: inherit;
+  background: white;
+  color: #12343b;
+}
+.notification-form textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.notification-list article > div {
+  flex: 1;
+  min-width: 0;
+}
+.notification-form input[type="checkbox"] {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin: 0 8px 0 0;
+  vertical-align: middle;
+}

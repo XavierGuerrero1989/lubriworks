@@ -1,3 +1,9 @@
+import {
+  notificationSettingsSchema,
+  reminderStage,
+  renderNotice,
+} from "../shared/notifications.js";
+import { sendQueuedNotices } from "./notificationDelivery.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import webpush from "web-push";
@@ -66,6 +72,14 @@ export default async function handler(
             reminderTenant = tenant.id;
             reminderCursor = "";
           }
+          const settings = notificationSettingsSchema.parse(
+            (
+              await tenant.ref.collection("settings").doc("notifications").get()
+            ).data() || {},
+          );
+          const queued = await sendQueuedNotices(tenant.ref, enabled, start);
+          sent += queued.sent;
+          failed += queued.failed;
           const remindersQuery = tenant.ref
             .collection("reminders")
             .where("status", "==", "active");
@@ -84,22 +98,60 @@ export default async function handler(
               reminderCursor = doc.id;
               continue;
             }
-            const info = dueInfo(r, vehicle.data() as Vehicle);
+            const info = reminderStage(r, vehicle.data() as Vehicle, settings);
             if (!info.soon) {
               reminderCursor = doc.id;
               continue;
             }
-            const noticeId = hash(
+            if (settings.pauseWithAppointment) {
+              const appointments = await tenant.ref
+                .collection("appointments")
+                .where("vehicleId", "==", r.vehicleId)
+                .get();
+              if (
+                appointments.docs.some(
+                  (a) =>
+                    ["requested", "confirmed"].includes(a.data().status) &&
+                    a.data().date >=
+                      new Date().toLocaleDateString("en-CA", {
+                        timeZone: "America/Argentina/Buenos_Aires",
+                      }),
+                )
+              ) {
+                reminderCursor = doc.id;
+                continue;
+              }
+            }
+            const baseId = hash(
               `${r.id}|${r.dueDate}|${r.dueKm}|${info.overdue ? "overdue" : "soon"}`,
             );
+            let repeat = 0;
+            if (info.overdue) {
+              const base = await tenant.ref
+                .collection("notifications")
+                .doc(baseId)
+                .get();
+              if (base.exists)
+                repeat = Math.min(
+                  settings.repeats,
+                  Math.max(
+                    0,
+                    Math.floor(
+                      (Date.now() - Date.parse(base.data()!.date)) /
+                        864e5 /
+                        settings.repeatDays,
+                    ),
+                  ),
+                );
+            }
+            const noticeId = repeat
+              ? hash(baseId + "|repeat|" + repeat)
+              : baseId;
             const noticeRef = tenant.ref
               .collection("notifications")
               .doc(noticeId);
-            const title = info.overdue
-              ? `Revisá tu próximo mantenimiento`
-              : `Se acerca un mantenimiento`;
-            // Push content deliberately omits plate, name, and account details on lock screens.
-            const body = `${r.title}: ${r.dueKm === null ? "revisá el vencimiento registrado" : "según el uso estimado, revisá tu kilometraje"}. Consultá el detalle o solicitá un turno.`;
+            const title = settings.title;
+            const body = renderNotice(settings, r.title, info.overdue);
             const created = await db.runTransaction(async (tx) => {
               const [n, t, rr, vv] = await Promise.all([
                 tx.get(noticeRef),
@@ -116,7 +168,7 @@ export default async function handler(
                 fresh.dueKm !== r.dueKm
               )
                 return null;
-              const live = dueInfo(fresh, vv.data() as Vehicle);
+              const live = reminderStage(fresh, vv.data() as Vehicle, settings);
               if (!live.soon || live.overdue !== info.overdue) return null;
               if (n.exists) return false;
               tx.create(noticeRef, {
@@ -127,6 +179,12 @@ export default async function handler(
                 body,
                 date: new Date().toISOString(),
                 read: false,
+                dueDate: r.dueDate,
+                dueKm: r.dueKm,
+                reminderId: r.id,
+                category: info.category,
+                origin: "automatic",
+                pushStatus: "pending",
               });
               return true;
             });
@@ -139,106 +197,15 @@ export default async function handler(
               reminderCursor = doc.id;
               continue;
             }
-            const subscriptions = iteratePages(
-              tenant.ref
-                .collection("subscriptions")
-                .where("customerId", "==", r.customerId),
-            );
-            for await (const sub of subscriptions) {
-              if (Date.now() - start > 45000) break reminderLoop;
-              const receipt = tenant.ref
-                .collection("deliveries")
-                .doc(hash(noticeId + sub.id));
-              const subData = sub.data();
-              const maySend = await db.runTransaction(async (tx) => {
-                const [delivery, t, m, c, currentReminder, currentVehicle] =
-                  await Promise.all([
-                    tx.get(receipt),
-                    tx.get(tenant.ref),
-                    tx.get(tenant.ref.collection("members").doc(subData.uid)),
-                    tx.get(
-                      tenant.ref.collection("customers").doc(r.customerId),
-                    ),
-                    tx.get(doc.ref),
-                    tx.get(vehicle.ref),
-                  ]);
-                const member = m.data(),
-                  existing = delivery.data();
-                if (
-                  !currentVehicle.exists ||
-                  currentReminder.data()?.dueDate !== r.dueDate ||
-                  currentReminder.data()?.dueKm !== r.dueKm ||
-                  !dueInfo(
-                    currentReminder.data() as Reminder,
-                    currentVehicle.data() as Vehicle,
-                  ).soon
-                )
-                  return false;
-                if (
-                  !t.data()?.active ||
-                  currentReminder.data()?.status !== "active" ||
-                  member?.active !== true ||
-                  member.role !== "customer" ||
-                  member.customerId !== r.customerId ||
-                  c.data()?.pushEnabled !== true
-                )
-                  return false;
-                if (
-                  existing?.status === "sent" ||
-                  existing?.status === "permanent-failure" ||
-                  existing?.leaseUntil > Date.now() ||
-                  (existing?.attempts || 0) >= 5
-                )
-                  return false;
-                tx.set(
-                  receipt,
-                  {
-                    status: "sending",
-                    leaseUntil: Date.now() + 90000,
-                    attempts: (existing?.attempts || 0) + 1,
-                    updatedAt: new Date().toISOString(),
-                  },
-                  { merge: true },
-                );
-                return true;
-              });
-              if (!maySend) continue;
-              try {
-                await webpush.sendNotification(
-                  subData.subscription,
-                  JSON.stringify({
-                    title: `${tenant.data().name} · ${title}`,
-                    body,
-                    tag: noticeId,
-                  }),
-                  { TTL: 86400, timeout: 5000 },
-                );
-                await receipt.set(
-                  {
-                    status: "sent",
-                    leaseUntil: 0,
-                    sentAt: new Date().toISOString(),
-                  },
-                  { merge: true },
-                );
-                sent++;
-              } catch (error) {
-                failed++;
-                const status = (error as { statusCode?: number }).statusCode;
-                const permanent = status === 404 || status === 410;
-                if (permanent) await sub.ref.delete();
-                await receipt.set(
-                  {
-                    status: permanent ? "permanent-failure" : "pending",
-                    leaseUntil: 0,
-                    statusCode: status || 0,
-                  },
-                  { merge: true },
-                );
-              }
-            }
             reminderCursor = doc.id;
           }
+          const queuedAfter = await sendQueuedNotices(
+            tenant.ref,
+            enabled,
+            start,
+          );
+          sent += queuedAfter.sent;
+          failed += queuedAfter.failed;
           // Repeat this tenant next time if the time budget was exhausted partway through.
           if (Date.now() - start > 45000) break;
         }

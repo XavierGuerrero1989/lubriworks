@@ -56,6 +56,13 @@ export const schemas = {
     phone: z.string().max(40).default(""),
     notes: text,
     pushEnabled: z.boolean().default(true),
+    notificationPreferences: z
+      .object({
+        maintenance: z.boolean(),
+        extinguisher: z.boolean(),
+        messages: z.boolean(),
+      })
+      .optional(),
   }),
   vehicles: z.object({
     customerId: key,
@@ -209,6 +216,10 @@ export type Notice = {
   body: string;
   date: string;
   read: boolean;
+  reminderId?: string;
+  category?: "maintenance" | "extinguisher" | "messages";
+  origin?: string;
+  pushStatus?: string;
 };
 export type State = { [K in Collection]: Entity<K>[] } & {
   reminders: Reminder[];

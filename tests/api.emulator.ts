@@ -280,6 +280,12 @@ describe("real API + Auth / Firestore emulators", () => {
   it("cron creates persistent notices once without configured push", async () => {
     process.env.CRON_SECRET = "test-secret-that-is-long-enough-123456789";
     delete process.env.VAPID_PRIVATE_KEY;
+    const { db } = admin();
+    // This test exercises notice idempotency independently of the new appointment pause rule.
+    for (const id of ["alpha", "beta"])
+      await db
+        .doc(`tenants/${id}/settings/notifications`)
+        .set({ pauseWithAppointment: false });
     const headers = { Authorization: `Bearer ${process.env.CRON_SECRET}` };
     const first = await fetch(base + "/cron", { headers });
     expect(first.status).toBe(200);
@@ -288,6 +294,8 @@ describe("real API + Auth / Firestore emulators", () => {
     expect(result.pushConfigured).toBe(false);
     const second = await fetch(base + "/cron", { headers });
     expect((await second.json()).notices).toBe(0);
+    for (const id of ["alpha", "beta"])
+      await db.doc(`tenants/${id}/settings/notifications`).delete();
   });
   it("cron rejects unauthenticated requests", async () =>
     expect((await fetch(base + "/cron")).status).toBe(401));
@@ -609,14 +617,12 @@ describe("real API + Auth / Firestore emulators", () => {
       }
       await batch.commit();
     }
-    await db
-      .doc("systemJobs/reminders")
-      .set({
-        cursor: "beta",
-        reminderTenant: "large-demo",
-        reminderCursor: "bulk-rem-02099",
-        leaseUntil: 0,
-      });
+    await db.doc("systemJobs/reminders").set({
+      cursor: "beta",
+      reminderTenant: "large-demo",
+      reminderCursor: "bulk-rem-02099",
+      leaseUntil: 0,
+    });
     process.env.CRON_SECRET = "x".repeat(40);
     const response = await fetch(base.replace(/\/rpc$/, "/") + "/cron", {
       headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },

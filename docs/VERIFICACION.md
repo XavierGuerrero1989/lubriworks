@@ -69,3 +69,11 @@ Build aprobado. Revisión local del componente App real con autenticación y dat
 - 35 pruebas de negocio/transporte y 29 de API/reglas aprobadas (64). Caso de carga con 2.108 clientes y vehículos, 2.107 órdenes y ventas; recorrido de todas las páginas sin duplicados; conteos exactos, directorio completo, cierre de orden con una sola orden/vehículo cargados, restricciones y revocación en cada página; cron reanuda una empresa con más de 2.100 recordatorios activos.
 - Revisión visual de las tarjetas en escritorio y celular usando datos ficticios. Captura `tenant-kpis-preview.jpg` corresponde a revisión local, no a los valores de producción.
 - Los tamaños por página, validaciones de entrada, presupuesto de tiempo del cron y límites técnicos de Firebase/Vercel se mantienen; no son cuotas de registros por lubricentro. La carga inicial de la interfaz operativa sigue reuniendo el historial completo en memoria y puede volverse pesada con historiales muy grandes.
+
+## Notificaciones — 8 de octubre de 2026
+
+Se incorporó la sección para propietarios y encargados con resumen, reglas de anticipación por fecha/kilómetros, categorías, pausa por turno, repeticiones de vencidos, plantilla, mensajes individuales o a todos los clientes, historial de lectura/entrega y preferencias. En el portal del cliente hay bandeja con acciones, preferencias por categoría y dispositivos propios.
+
+La revisión de push sigue siendo diaria a las 09:00 de Argentina. El aviso manual aparece inmediatamente en el portal; push queda en cola para el cron. Los estados de entrega representan aceptación del proveedor, no recepción comprobada del teléfono. No hay correo ni WhatsApp. Las reglas y preferencias son independientes por empresa; clientes y dispositivos se validan contra la membresía y el tenant.
+
+Pruebas: reglas por fecha/km, categorías desactivadas, persistencia de preferencias al editar clientes, separación entre empresas, prohibición de administrar reglas desde cliente/técnico, dispositivos propios, destinatarios válidos, idempotencia de mensajes, reintento push con proveedor simulado y cancelación de avisos de mantenimiento ya completado. Revisión visual de pantallas de lubricentro y cliente en navegador local, incluyendo formulario de lectura del tablero. La recepción push en un teléfono real sigue pendiente de prueba.

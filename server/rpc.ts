@@ -1,3 +1,4 @@
+import { notificationRpc } from "./notifications.js";
 import { overview, team, saveMember } from "./platform.js";
 import { createHash } from "node:crypto";
 import { z, ZodError } from "zod";
@@ -199,6 +200,12 @@ export default async function handler(
       throw new Error("Acción desconocida.");
     }
     if (!tenantId) throw new Error("Seleccioná una empresa.");
+    if (action.startsWith("notifications."))
+      return respond(
+        res,
+        200,
+        await notificationRpc(db, tenantId, uid, action, payload, operationId),
+      );
     const tref = db.doc(`tenants/${tenantId}`),
       mref = db.doc(`tenants/${tenantId}/members/${uid}`);
     if (
@@ -382,6 +389,17 @@ export default async function handler(
             customerId: access.member.customerId,
             subscription,
             updatedAt: new Date().toISOString(),
+            label: /iPhone/.test(String(req.headers["user-agent"]))
+              ? "iPhone"
+              : /Android/.test(String(req.headers["user-agent"]))
+                ? "Android"
+                : /Edg/.test(String(req.headers["user-agent"]))
+                  ? "Microsoft Edge"
+                  : /Firefox/.test(String(req.headers["user-agent"]))
+                    ? "Firefox"
+                    : /Chrome/.test(String(req.headers["user-agent"]))
+                      ? "Chrome"
+                      : "Safari / navegador",
           });
       });
       return respond(res, 200, { ok: true });

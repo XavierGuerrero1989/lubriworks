@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { auth } from "./lib/firebase";
-import { rpc } from "./lib/api";
+import { rpc, snapshot } from "./lib/api";
 import { Login } from "./components/Login";
 import { Workspace } from "./components/Workspace";
 import { demoAccess, demoState } from "../shared/demo";
@@ -73,11 +73,7 @@ export default function App() {
       if (pending || document.visibilityState === "hidden") return;
       pending = true;
       try {
-        const r = await rpc<{
-          access: Access;
-          state: State;
-          vapidPublicKey: string;
-        }>("snapshot", {}, tenantId, controller.current?.signal);
+        const r = await snapshot(tenantId, controller.current?.signal);
         if (current === generation.current) {
           setActive(r.access);
           setState(r.state);
@@ -135,11 +131,7 @@ export default function App() {
     setLoading(true);
     controller.current = new AbortController();
     try {
-      const result = await rpc<{
-        access: Access;
-        state: State;
-        vapidPublicKey: string;
-      }>("snapshot", {}, a.tenant.id, controller.current.signal);
+      const result = await snapshot(a.tenant.id, controller.current.signal);
       if (current === generation.current) {
         setActive(result.access);
         setState(result.state);
@@ -189,9 +181,7 @@ export default function App() {
         "Cambiaste de empresa. La operación se procesó en la empresa anterior.",
       );
     try {
-      const result = await rpc<{ access: Access; state: State }>(
-        "snapshot",
-        {},
+      const result = await snapshot(
         scope.tenant.id,
         controller.current?.signal,
       );

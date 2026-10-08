@@ -6,6 +6,7 @@ export type PlatformTenant = Tenant & {
   customers: number;
   vehicles: number;
   orders: number;
+  sales: number;
 };
 export type PlatformActivity = {
   id: string;

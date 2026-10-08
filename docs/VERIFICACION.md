@@ -58,3 +58,14 @@ Build de producción aprobado y 26 pruebas de API/reglas en emuladores aprobadas
 Una cuenta común con una única membresía entra directamente a su lubricentro después del login o al restaurar la sesión. El número de sucursales no interviene. Se conserva el selector para múltiples empresas y el ingreso del superadmin a plataforma. Al abrir los accesos operativos desde plataforma también se abre directamente la única empresa. La carga conserva comprobaciones de generación y cancelación para evitar datos de una sesión anterior; un fallo de carga ofrece reintento sin selector para cuentas con un único acceso.
 
 Build aprobado. Revisión local del componente App real con autenticación y datos ficticios: una empresa con dos sucursales abrió Inicio; dos empresas mostraron el selector; un fallo simulado mostró error y Reintentar.
+
+
+## Historial sin tope de 2.000 y KPI por empresa — 8 de octubre de 2026
+
+- API `snapshot`/`state.page` con páginas de 200 registros y verificación de tenant, membresía y proyección por rol en cada solicitud. El cliente obtiene todas las páginas sin truncar los reportes. Se cancela el resultado si cambia el rol o el vínculo de cliente durante la carga.
+- Consultas dirigidas por comando: finalizar órdenes, cobros, stock, recepción de compras, perfiles y lecturas ya no cargan todas las colecciones del tenant. Las lecturas de ventas para cerrar caja se acotan desde su apertura; las validaciones de duplicados se consultan por clave, sucursal/horario o vínculo pertinente. Se conservan transacciones, idempotencia y auditoría.
+- Directorios de plataforma y usuarios sin el anterior tope; consultas internas por páginas. Cron con iteración gradual y reanudación dentro de una empresa con muchos recordatorios.
+- Panel de superadmin: tabla por lubricentro y tarjetas en Empresas y usuarios con totales de clientes, vehículos, órdenes y ventas, obtenidos mediante conteos de Firestore. Totales agregados de portada indican su alcance por página de empresas.
+- 35 pruebas de negocio/transporte y 29 de API/reglas aprobadas (64). Caso de carga con 2.108 clientes y vehículos, 2.107 órdenes y ventas; recorrido de todas las páginas sin duplicados; conteos exactos, directorio completo, cierre de orden con una sola orden/vehículo cargados, restricciones y revocación en cada página; cron reanuda una empresa con más de 2.100 recordatorios activos.
+- Revisión visual de las tarjetas en escritorio y celular usando datos ficticios. Captura `tenant-kpis-preview.jpg` corresponde a revisión local, no a los valores de producción.
+- Los tamaños por página, validaciones de entrada, presupuesto de tiempo del cron y límites técnicos de Firebase/Vercel se mantienen; no son cuotas de registros por lubricentro. La carga inicial de la interfaz operativa sigue reuniendo el historial completo en memoria y puede volverse pesada con historiales muy grandes.

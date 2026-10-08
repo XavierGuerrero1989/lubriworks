@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { readPages, memberGuards } from "./store.js";
 import type { Firestore } from "firebase-admin/firestore";
 import type { Auth } from "firebase-admin/auth";
 import { key, roles, type Member, type Tenant } from "../shared/model.js";
@@ -31,20 +32,25 @@ export async function overview(
   for (let i = 0; i < rows.length; i += 10)
     await Promise.all(
       rows.slice(i, i + 10).map(async (d) => {
-        const [members, enabled, owners, customers, vehicles, orders, audit] =
-          await Promise.all([
-            d.ref.collection("members").count().get(),
-            d.ref
-              .collection("members")
-              .where("active", "==", true)
-              .count()
-              .get(),
-            d.ref.collection("members").where("role", "==", "owner").get(),
-            d.ref.collection("customers").count().get(),
-            d.ref.collection("vehicles").count().get(),
-            d.ref.collection("orders").count().get(),
-            d.ref.collection("audit").orderBy("date", "desc").limit(8).get(),
-          ]);
+        const [
+          members,
+          enabled,
+          owners,
+          customers,
+          vehicles,
+          orders,
+          sales,
+          audit,
+        ] = await Promise.all([
+          d.ref.collection("members").count().get(),
+          d.ref.collection("members").where("active", "==", true).count().get(),
+          d.ref.collection("members").where("role", "==", "owner").get(),
+          d.ref.collection("customers").count().get(),
+          d.ref.collection("vehicles").count().get(),
+          d.ref.collection("orders").count().get(),
+          d.ref.collection("sales").count().get(),
+          d.ref.collection("audit").orderBy("date", "desc").limit(8).get(),
+        ]);
         const tenant = { ...d.data(), id: d.id } as Tenant;
         tenants.push({
           ...tenant,
@@ -54,6 +60,7 @@ export async function overview(
           customers: customers.data().count,
           vehicles: vehicles.data().count,
           orders: orders.data().count,
+          sales: sales.data().count,
         });
         activity.push(
           ...audit.docs.map((a) => ({
@@ -89,16 +96,14 @@ export async function team(
   const tenant = db.doc(`tenants/${id}`);
   const [t, m, c] = await Promise.all([
     tenant.get(),
-    tenant.collection("members").limit(2001).get(),
-    tenant.collection("customers").limit(2001).get(),
+    readPages(tenant.collection("members")),
+    readPages(tenant.collection("customers")),
   ]);
   if (!t.exists) throw new Error("La empresa no existe.");
-  if (m.size > 2000 || c.size > 2000)
-    throw new Error("Este directorio requiere paginación.");
   await verify(db, uid);
   return {
-    members: m.docs.map((d) => ({ ...d.data(), uid: d.id }) as Member),
-    customers: c.docs.map((d) => ({
+    members: m.map((d) => ({ ...d.data(), uid: d.id }) as Member),
+    customers: c.map((d) => ({
       id: d.id,
       name: String(d.data().name || d.id),
     })),
@@ -130,7 +135,7 @@ export async function saveMember(
     const [admin, t, members, customer] = await Promise.all([
       tx.get(db.doc(`platformAdmins/${uid}`)),
       tx.get(ref),
-      tx.get(ref.collection("members")),
+      memberGuards(ref, tx, data.customerId),
       data.customerId
         ? tx.get(ref.collection("customers").doc(data.customerId))
         : Promise.resolve(null),

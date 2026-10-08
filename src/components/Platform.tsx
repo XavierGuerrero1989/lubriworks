@@ -284,8 +284,9 @@ export function Platform({
       vehicles: n.vehicles + t.vehicles,
       customers: n.customers + t.customers,
       orders: n.orders + t.orders,
+      sales: n.sales + t.sales,
     }),
-    { members: 0, vehicles: 0, customers: 0, orders: 0 },
+    { members: 0, vehicles: 0, customers: 0, orders: 0, sales: 0 },
   );
   const pageControls = data && (pages.length > 0 || data.nextCursor) && (
     <div className="lw-pages">
@@ -474,21 +475,25 @@ export function Platform({
                       <thead>
                         <tr>
                           <th>Empresa</th>
-                          <th>Accesos</th>
+                          <th>Clientes</th>
                           <th>Vehículos</th>
+                          <th>Órdenes</th>
+                          <th>Ventas</th>
                           <th>Estado</th>
                           <th />
                         </tr>
                       </thead>
                       <tbody>
-                        {data.tenants.slice(0, 8).map((t) => (
+                        {data.tenants.map((t) => (
                           <tr key={t.id}>
                             <td>
                               <strong>{t.name}</strong>
                               <small>{t.id}</small>
                             </td>
-                            <td>{t.activeMembers}</td>
+                            <td>{t.customers}</td>
                             <td>{t.vehicles}</td>
+                            <td>{t.orders}</td>
+                            <td>{t.sales}</td>
                             <td>
                               <span
                                 className={`lw-status ${t.active ? "active" : "paused"}`}
@@ -589,6 +594,10 @@ export function Platform({
                     <div>
                       <strong>{totals!.orders}</strong>
                       <span>Órdenes de trabajo</span>
+                    </div>
+                    <div>
+                      <strong>{totals!.sales}</strong>
+                      <span>Ventas registradas</span>
                     </div>
                   </div>
                   <small className="lw-muted">
@@ -693,6 +702,35 @@ export function Platform({
                           {selected.active ? "Activa" : "Suspendida"}
                         </span>
                       </div>
+                      <section
+                        className="lw-tenant-metrics"
+                        aria-label="Totales del lubricentro"
+                      >
+                        <Stat
+                          label="Clientes"
+                          value={selected.customers}
+                          detail="Registrados en este lubricentro"
+                          icon={<Users />}
+                        />
+                        <Stat
+                          label="Vehículos"
+                          value={selected.vehicles}
+                          detail="Registrados en este lubricentro"
+                          icon={<Car />}
+                        />
+                        <Stat
+                          label="Órdenes"
+                          value={selected.orders}
+                          detail="Historial completo"
+                          icon={<History />}
+                        />
+                        <Stat
+                          label="Ventas"
+                          value={selected.sales}
+                          detail="Cantidad de operaciones, no importe"
+                          icon={<Building2 />}
+                        />
+                      </section>
                       {teamError && (
                         <p className="error" role="alert">
                           {teamError}

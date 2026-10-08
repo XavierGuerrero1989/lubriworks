@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import webpush from "web-push";
+import { iteratePages } from "./store.js";
 import { admin } from "./firebase.js";
 import { respond } from "./rpc.js";
 import { dueInfo, type Reminder, type Vehicle } from "../shared/model.js";
@@ -56,26 +57,38 @@ export default async function handler(
       if (cursor) query = query.startAfter(cursor);
       const tenants = await query.get();
       let last = cursor;
+      let reminderTenant = String(previous.data()?.reminderTenant || ""),
+        reminderCursor = String(previous.data()?.reminderCursor || "");
       for (const tenant of tenants.docs) {
         if (Date.now() - start > 45000) break;
         if (tenant.data().active) {
-          const reminders = await tenant.ref
+          if (reminderTenant !== tenant.id) {
+            reminderTenant = tenant.id;
+            reminderCursor = "";
+          }
+          const remindersQuery = tenant.ref
             .collection("reminders")
-            .where("status", "==", "active")
-            .limit(2001)
-            .get();
-          if (reminders.size > 2000)
-            throw new Error("Reminder scan requires pagination");
-          for (const doc of reminders.docs) {
+            .where("status", "==", "active");
+          reminderLoop: for await (const doc of iteratePages(
+            remindersQuery,
+            undefined,
+            reminderCursor || undefined,
+          )) {
             if (Date.now() - start > 45000) break;
             const r = doc.data() as Reminder;
             const vehicle = await tenant.ref
               .collection("vehicles")
               .doc(r.vehicleId)
               .get();
-            if (!vehicle.exists) continue;
+            if (!vehicle.exists) {
+              reminderCursor = doc.id;
+              continue;
+            }
             const info = dueInfo(r, vehicle.data() as Vehicle);
-            if (!info.soon) continue;
+            if (!info.soon) {
+              reminderCursor = doc.id;
+              continue;
+            }
             const noticeId = hash(
               `${r.id}|${r.dueDate}|${r.dueKm}|${info.overdue ? "overdue" : "soon"}`,
             );
@@ -117,15 +130,22 @@ export default async function handler(
               });
               return true;
             });
-            if (created === null) continue;
+            if (created === null) {
+              reminderCursor = doc.id;
+              continue;
+            }
             if (created) notices++;
-            if (!enabled) continue;
-            const subscriptions = await tenant.ref
-              .collection("subscriptions")
-              .where("customerId", "==", r.customerId)
-              .limit(100)
-              .get();
-            for (const sub of subscriptions.docs) {
+            if (!enabled) {
+              reminderCursor = doc.id;
+              continue;
+            }
+            const subscriptions = iteratePages(
+              tenant.ref
+                .collection("subscriptions")
+                .where("customerId", "==", r.customerId),
+            );
+            for await (const sub of subscriptions) {
+              if (Date.now() - start > 45000) break reminderLoop;
               const receipt = tenant.ref
                 .collection("deliveries")
                 .doc(hash(noticeId + sub.id));
@@ -217,11 +237,14 @@ export default async function handler(
                 );
               }
             }
+            reminderCursor = doc.id;
           }
           // Repeat this tenant next time if the time budget was exhausted partway through.
           if (Date.now() - start > 45000) break;
         }
         last = tenant.id;
+        reminderTenant = "";
+        reminderCursor = "";
       }
       completed =
         tenants.size < 100 &&
@@ -229,6 +252,8 @@ export default async function handler(
       await lock.set(
         {
           cursor: completed ? "" : last,
+          reminderTenant: completed ? "" : reminderTenant,
+          reminderCursor: completed ? "" : reminderCursor,
           leaseUntil: 0,
           lastRunAt: new Date().toISOString(),
           completed,

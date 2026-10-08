@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import { admin } from "../server/firebase";
 import handler from "../server/rpc";
 import cron from "../server/reminders";
+import { loadCommandState, PAGE_SIZE } from "../server/store";
 import { demoState } from "../shared/demo";
 process.env.FIREBASE_PROJECT_ID = "demo-lubriworks";
 let server: Server,
@@ -449,4 +450,182 @@ describe("real API + Auth / Firestore emulators", () => {
     ).toBe(400);
     expect((await call(ownerToken, "member.save", payload)).status).toBe(400);
   });
+  it("pages histories over 2000 rows and reports exact per-tenant counts", async () => {
+    const { db } = admin(),
+      seed = demoState(),
+      id = "large-demo";
+    await db.doc(`tenants/${id}`).set({
+      id,
+      name: "Large demo",
+      active: true,
+      schemaVersion: 1,
+      createdAt: new Date().toISOString(),
+    });
+    await db.doc(`tenants/${id}/members/owner`).set({
+      uid: "owner",
+      tenantId: id,
+      role: "owner",
+      active: true,
+      name: "Owner",
+      email: "owner@test.local",
+      customerId: null,
+    });
+    const rows: { path: string; data: any }[] = [];
+    for (const [c, items] of Object.entries(seed))
+      for (const item of items)
+        rows.push({ path: `tenants/${id}/${c}/${item.id}`, data: item });
+    for (let i = 0; i < 2105; i++) {
+      const k = `bulk-${String(i).padStart(5, "0")}`;
+      rows.push({
+        path: `tenants/${id}/customers/${k}`,
+        data: { ...seed.customers[0], id: k },
+      });
+      rows.push({
+        path: `tenants/${id}/vehicles/${k}`,
+        data: { ...seed.vehicles[0], id: k, customerId: k, plate: `DEMO-${i}` },
+      });
+      rows.push({
+        path: `tenants/${id}/orders/${k}`,
+        data: {
+          ...seed.orders[0],
+          id: k,
+          vehicleId: k,
+          customerId: k,
+          status: "paid",
+        },
+      });
+      rows.push({
+        path: `tenants/${id}/sales/${k}`,
+        data: { ...seed.sales[0], id: k, customerId: k },
+      });
+    }
+    for (let i = 0; i < rows.length; i += 400) {
+      const batch = db.batch();
+      for (const row of rows.slice(i, i + 400))
+        batch.set(db.doc(row.path), row.data);
+      await batch.commit();
+    }
+    const first = await call(ownerToken, "snapshot", {}, id);
+    expect(first.status).toBe(200);
+    expect(first.data.state.customers).toHaveLength(PAGE_SIZE);
+    const ids = new Set(first.data.state.customers.map((c: any) => c.id));
+    let cursor = first.data.next.customers;
+    while (cursor) {
+      const page = await call(
+        ownerToken,
+        "state.page",
+        { collection: "customers", cursor },
+        id,
+      );
+      expect(page.status).toBe(200);
+      for (const c of page.data.state.customers) ids.add(c.id);
+      cursor = page.data.next.customers;
+    }
+    expect(ids.size).toBe(2108);
+    const overview = await call(platformToken, "platform.overview");
+    const tenant = overview.data.tenants.find((t: any) => t.id === id);
+    expect(tenant).toMatchObject({
+      customers: 2108,
+      vehicles: 2108,
+      orders: 2107,
+      sales: 2107,
+    });
+    const directory = await call(platformToken, "platform.team", { id });
+    expect(directory.status).toBe(200);
+    expect(directory.data.customers).toHaveLength(2108);
+    const ref = db.doc(`tenants/${id}/members/owner`),
+      member = (await ref.get()).data() as any;
+    const scoped = await db.runTransaction(
+      (tx) =>
+        loadCommandState(
+          db,
+          tx,
+          id,
+          member,
+          { action: "finishOrder", id: "ot1001" },
+          crypto.randomUUID(),
+        ),
+      { readOnly: true },
+    );
+    expect(scoped.orders).toHaveLength(1);
+    expect(scoped.sales).toHaveLength(0);
+    expect(scoped.vehicles).toHaveLength(1);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { action: "finishOrder", id: "ot1001" },
+          id,
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await db.doc(`tenants/${id}/orders/ot1001`).get()).data()?.status,
+    ).toBe("ready");
+  }, 90000);
+  it("checks tenancy, role projection and revocation on every history page", async () => {
+    expect(
+      (await call(ownerToken, "state.page", { collection: "vehicles" }, "beta"))
+        .status,
+    ).toBe(400);
+    expect(
+      (await call(clientToken, "state.page", { collection: "products" }))
+        .status,
+    ).toBe(400);
+    const page = await call(clientToken, "state.page", {
+      collection: "vehicles",
+    });
+    expect(page.status).toBe(200);
+    expect(page.data.state.vehicles.map((v: any) => v.id)).toEqual(["v1"]);
+    const { db } = admin();
+    await db.doc("tenants/alpha/members/client").update({ active: false });
+    try {
+      expect(
+        (await call(clientToken, "state.page", { collection: "vehicles" }))
+          .status,
+      ).toBe(400);
+    } finally {
+      await db.doc("tenants/alpha/members/client").update({ active: true });
+    }
+  });
+  it("resumes a reminder scan inside a tenant with over 2000 active reminders", async () => {
+    const { db } = admin();
+    for (let i = 0; i < 2105; i += 400) {
+      const batch = db.batch();
+      for (let j = i; j < Math.min(i + 400, 2105); j++) {
+        const id = `bulk-rem-${String(j).padStart(5, "0")}`;
+        batch.set(db.doc(`tenants/large-demo/reminders/${id}`), {
+          id,
+          customerId: "c1",
+          vehicleId: "missing",
+          source: "test",
+          title: "Test",
+          dueDate: "2099-01-01",
+          dueKm: null,
+          status: "active",
+        });
+      }
+      await batch.commit();
+    }
+    await db
+      .doc("systemJobs/reminders")
+      .set({
+        cursor: "beta",
+        reminderTenant: "large-demo",
+        reminderCursor: "bulk-rem-02099",
+        leaseUntil: 0,
+      });
+    process.env.CRON_SECRET = "x".repeat(40);
+    const response = await fetch(base.replace(/\/rpc$/, "/") + "/cron", {
+      headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.completed).toBe(true);
+    const checkpoint = (await db.doc("systemJobs/reminders").get()).data();
+    expect(checkpoint?.reminderCursor).toBe("");
+    expect(checkpoint?.reminderTenant).toBe("");
+  }, 60000);
 });

@@ -8,11 +8,19 @@ import {
   key,
   projectState,
   roles,
+  collections,
+  visibleCollections,
   type Member,
   type Tenant,
 } from "../shared/model.js";
 import { execute, type Command } from "../shared/engine.js";
-import { loadState, persistDiff } from "./store.js";
+import {
+  loadCommandState,
+  statePage,
+  readPages,
+  memberGuards,
+  persistDiff,
+} from "./store.js";
 const envelope = z.object({
   action: z.string().max(60),
   tenantId: key.optional(),
@@ -109,11 +117,11 @@ export default async function handler(
       if (action === "platform.member.save")
         return respond(res, 200, await saveMember(db, auth, uid, payload));
       if (action === "platform.list") {
-        const tenants = await db.collection("tenants").limit(200).get();
+        const tenants = await readPages(db.collection("tenants"));
         return respond(
           res,
           200,
-          tenants.docs.map((d) => ({ ...d.data(), id: d.id })),
+          tenants.map((d) => ({ ...d.data(), id: d.id })),
         );
       }
       if (action === "platform.create") {
@@ -193,7 +201,11 @@ export default async function handler(
     if (!tenantId) throw new Error("Seleccioná una empresa.");
     const tref = db.doc(`tenants/${tenantId}`),
       mref = db.doc(`tenants/${tenantId}/members/${uid}`);
-    if (action === "snapshot" || action === "members") {
+    if (
+      action === "snapshot" ||
+      action === "state.page" ||
+      action === "members"
+    ) {
       const result = await db.runTransaction(
         async (tx) => {
           const [t, m] = await Promise.all([tx.get(tref), tx.get(mref)]);
@@ -207,12 +219,32 @@ export default async function handler(
             if (access.member.role !== "owner")
               throw new Error("Sólo el administrador gestiona accesos.");
             return (
-              await tx.get(db.collection(`tenants/${tenantId}/members`))
-            ).docs.map((d) => d.data());
+              await readPages(db.collection(`tenants/${tenantId}/members`), tx)
+            ).map((d) => d.data());
           }
-          const state = await loadState(db, tenantId, tx);
+          const paging = z
+            .object({
+              collection: z.enum(collections).optional(),
+              cursor: key.optional(),
+            })
+            .parse(payload);
+          if (action === "state.page" && !paging.collection)
+            throw new Error("Seleccioná un módulo.");
+          const { state, next } = await statePage(
+            db,
+            tx,
+            tenantId,
+            access.member,
+            action === "state.page"
+              ? [paging.collection!]
+              : visibleCollections(access.member.role),
+            paging.collection && paging.cursor
+              ? { [paging.collection]: paging.cursor }
+              : {},
+          );
           return {
             access,
+            next,
             state: projectState(state, access.member),
             vapidPublicKey: process.env.VAPID_PUBLIC_KEY || "",
           };
@@ -251,7 +283,7 @@ export default async function handler(
         const [t, m, team, customer] = await Promise.all([
           tx.get(tref),
           tx.get(mref),
-          tx.get(db.collection(`tenants/${tenantId}/members`)),
+          memberGuards(tref, tx, data.customerId),
           data.customerId
             ? tx.get(db.doc(`tenants/${tenantId}/customers/${data.customerId}`))
             : Promise.resolve(null),
@@ -379,7 +411,14 @@ export default async function handler(
             throw new Error("Identificador de operación reutilizado.");
           return { ok: true, replayed: true };
         }
-        const before = await loadState(db, tenantId, tx);
+        const before = await loadCommandState(
+          db,
+          tx,
+          tenantId,
+          access.member,
+          payload as Command,
+          operationId,
+        );
         const after = execute(
           before,
           access.member,

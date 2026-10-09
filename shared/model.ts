@@ -102,6 +102,10 @@ export const schemas = {
       hasExtinguisher: z.boolean().optional(),
       wantsExtinguisher: z.boolean().optional(),
       extinguisherDue: optionalDate,
+      oilSpecification: z.string().trim().max(300).optional(),
+      oilCapacity: z.number().finite().min(0).max(100).nullable().optional(),
+      compatibleFilters: z.string().trim().max(1000).optional(),
+      technicalNotes: z.string().trim().max(1000).optional(),
     })
     .refine((v) => v.hasExtinguisher !== true || !!v.extinguisherDue, {
       message: "Indicá el vencimiento del matafuegos.",
@@ -351,12 +355,42 @@ export type Notice = {
   origin?: string;
   pushStatus?: string;
 };
+export type VehicleReading = {
+  id: string;
+  vehicleId: string;
+  customerId: string;
+  odometer: number;
+  readingDate: string;
+  beforeOdometer: number | null;
+  beforeDate: string;
+  source: "initial" | "reading" | "service" | "correction";
+  at: string;
+  by: string;
+  actorName: string;
+  reason: string;
+  orderId?: string;
+};
+export type VehicleRecommendation = {
+  id: string;
+  vehicleId: string;
+  customerId: string;
+  text: string;
+  status: "pending" | "resolved";
+  createdAt: string;
+  by: string;
+  actorName: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  resolution?: string;
+};
 export type State = { [K in Collection]: Entity<K>[] } & {
   reminders: Reminder[];
   sales: Sale[];
   cash: CashSession[];
   movements: Movement[];
   notifications: Notice[];
+  vehicleReadings: VehicleReading[];
+  vehicleRecommendations: VehicleRecommendation[];
 };
 export const collections = [
   "branches",
@@ -373,6 +407,8 @@ export const collections = [
   "cash",
   "movements",
   "notifications",
+  "vehicleReadings",
+  "vehicleRecommendations",
 ] as const;
 export type StateCollection = (typeof collections)[number];
 export function emptyState(): State {
@@ -427,6 +463,8 @@ export function visibleCollections(role: Role): StateCollection[] {
       "reminders",
       "services",
       "products",
+      "vehicleReadings",
+      "vehicleRecommendations",
     ];
   if (role === "cashier")
     return [
@@ -440,6 +478,8 @@ export function visibleCollections(role: Role): StateCollection[] {
       "sales",
       "cash",
       "reminders",
+      "vehicleReadings",
+      "vehicleRecommendations",
     ];
   return [...collections];
 }
@@ -456,6 +496,7 @@ export function projectState(state: State, member: Member): State {
     (out as any)[collection] = structuredClone(rows);
   }
   if (member.role === "customer") {
+    out.vehicles = out.vehicles.map((v) => ({ ...v, technicalNotes: "" }));
     out.customers = out.customers.map((c) => ({ ...c, notes: "" }));
     out.orders = out.orders.map((o) => ({
       ...o,

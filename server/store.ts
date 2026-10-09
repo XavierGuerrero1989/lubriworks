@@ -141,7 +141,14 @@ export async function loadCommandState(
       );
     if (c === "vehicles") {
       await query(c, col(c).where("plate", "==", data.plate));
-      await doc("reminders", `fire-${cmd.id || operationId}`);
+      await query(
+        "reminders",
+        col("reminders").where("vehicleId", "==", cmd.id || operationId),
+      );
+      await query(
+        "orders",
+        col("orders").where("vehicleId", "==", cmd.id || operationId),
+      );
     }
     if (c === "products") await query(c, col(c).where("sku", "==", data.sku));
     if (c === "services" || c === "purchases") await products(data.items);
@@ -219,8 +226,13 @@ export async function loadCommandState(
         "sales",
         col("sales").where("date", ">=", c.openedAt).orderBy("date"),
       );
-  } else if (cmd.action === "reading") await doc("vehicles", cmd.id);
-  else if (cmd.action === "profile") await doc("customers", member.customerId);
+  } else if (cmd.action === "reading" || cmd.action.startsWith("vehicle.")) {
+    await doc("vehicles", cmd.id);
+    await query("orders", col("orders").where("vehicleId", "==", cmd.id));
+    if (cmd.action === "vehicle.recommendation.resolve")
+      await doc("vehicleRecommendations", cmd.recommendationId);
+  } else if (cmd.action === "profile")
+    await doc("customers", member.customerId);
   else if (cmd.action === "requestAppointment") {
     await doc("vehicles", cmd.vehicleId);
     await doc("branches", cmd.branchId);

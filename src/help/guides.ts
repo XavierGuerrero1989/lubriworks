@@ -84,6 +84,24 @@ export const guides: HelpGuide[] = [
     destination: "customers",
   },
   {
+    id: "staff-customer-file",
+    scope: "staff",
+    section: "customers",
+    title: "¿Cómo uso la ficha del cliente y corrijo kilometraje?",
+    keywords:
+      "ficha cliente historial visita actual aceite especificación capacidad filtros técnica notas recomendación resolver corregir kilometraje lectura motivo",
+    steps: [
+      "Buscá una patente, nombre, correo o teléfono en Clientes y vehículos y elegí la ficha.",
+      "Seleccioná un vehículo o Todos los vehículos del cliente para consultar visitas, turnos, mantenimientos e historial de todas las sucursales.",
+      "En Editar vehículo / ficha técnica, cargá la especificación y capacidad de aceite confirmadas y los códigos de filtros compatibles. Las observaciones técnicas y las notas del cliente son internas.",
+      "Cargá por separado las Recomendaciones para el cliente y marcá su resolución con una explicación cuando se atiendan. Su presentación en el portal se incorporará en la etapa del cliente.",
+      "Nueva lectura real registra una medición que no puede disminuir. Si hubo un error, administrador o encargado usa Corregir kilometraje y explica el motivo. Quedan guardados el valor anterior, responsable y fecha.",
+      "Abrí la orden de la visita actual para continuar el trabajo, Recibir sin turno para una nueva visita o Agendar turno para reservar.",
+    ],
+    note: "Una corrección reinicia la base de cálculo del uso promedio y no cambia órdenes históricas ni mantenimientos programados. No se permite una lectura que contradiga una visita abierta. Las lecturas anteriores a esta función no reciben un historial inventado.",
+    destination: "customers",
+  },
+  {
     id: "staff-order",
     scope: "staff",
     section: "orders",

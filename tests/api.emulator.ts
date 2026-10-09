@@ -5,6 +5,7 @@ import handler from "../server/rpc";
 import cron from "../server/reminders";
 import { loadCommandState, PAGE_SIZE } from "../server/store";
 import { demoState } from "../shared/demo";
+import { today } from "../shared/model";
 process.env.FIREBASE_PROJECT_ID = "demo-lubriworks";
 let server: Server,
   base = "",
@@ -1281,5 +1282,155 @@ describe("real API + Auth / Firestore emulators", () => {
         )
       ).status,
     ).toBe(400);
+  });
+  it("persists audited vehicle corrections, technical fields and private recommendations", async () => {
+    const { db } = admin(),
+      seed = demoState(),
+      vehicleId = "v-file";
+    const v = {
+      ...seed.vehicles[1],
+      id: vehicleId,
+      customerId: "c1",
+      plate: "FILE001",
+    };
+    await db.doc("tenants/alpha/vehicles/" + vehicleId).set(v);
+    const operation = crypto.randomUUID(),
+      payload = {
+        action: "vehicle.correctReading",
+        id: vehicleId,
+        odometer: 42000,
+        date: today(),
+        reason: "Error al transcribir el tablero",
+      };
+    const results = await Promise.all([
+      call(ownerToken, "command", payload, "alpha", operation),
+      call(ownerToken, "command", payload, "alpha", operation),
+    ]);
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
+    expect(
+      (
+        await db
+          .collection("tenants/alpha/vehicleReadings")
+          .where("vehicleId", "==", vehicleId)
+          .get()
+      ).size,
+    ).toBe(1);
+    expect(
+      (await db.doc("tenants/alpha/vehicleReadings/" + operation).get()).data(),
+    ).toMatchObject({
+      beforeOdometer: 46200,
+      odometer: 42000,
+      source: "correction",
+      reason: payload.reason,
+      by: "owner",
+    });
+    for (const token of [clientToken, otherToken])
+      expect(
+        (
+          await call(
+            token,
+            "command",
+            { ...payload, odometer: 41000 },
+            "alpha",
+            crypto.randomUUID(),
+          )
+        ).status,
+      ).toBe(400);
+    expect(
+      (await call(ownerToken, "command", payload, "beta", crypto.randomUUID()))
+        .status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { ...payload, reason: "" },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    const saved = (
+      await db.doc("tenants/alpha/vehicles/" + vehicleId).get()
+    ).data()!;
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "save",
+            collection: "vehicles",
+            id: vehicleId,
+            data: {
+              ...saved,
+              oilSpecification: "Norma confirmada",
+              oilCapacity: 4.2,
+              compatibleFilters: "Código confirmado",
+              technicalNotes: "Nota interna",
+            },
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+    const recId = crypto.randomUUID();
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "vehicle.recommendation.add",
+            id: vehicleId,
+            text: "Revisar filtro en próxima visita",
+          },
+          "alpha",
+          recId,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "vehicle.recommendation.resolve",
+            id: vehicleId,
+            recommendationId: recId,
+            resolution: "Filtro cambiado",
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await db.doc("tenants/alpha/vehicleRecommendations/" + recId).get()
+      ).data(),
+    ).toMatchObject({
+      status: "resolved",
+      resolution: "Filtro cambiado",
+      resolvedBy: "owner",
+    });
+    const client = await call(clientToken, "snapshot");
+    expect(
+      client.data.state.vehicles.find((r: any) => r.id === vehicleId)
+        .technicalNotes,
+    ).toBe("");
+    expect(client.data.state.vehicleReadings).toEqual([]);
+    expect(client.data.state.vehicleRecommendations).toEqual([]);
+    expect(
+      (await call(clientToken, "state.page", { collection: "vehicleReadings" }))
+        .status,
+    ).toBe(400);
+    const staff = await call(ownerToken, "snapshot");
+    expect(
+      staff.data.state.vehicleReadings.some((r: any) => r.id === operation),
+    ).toBe(true);
   });
 });

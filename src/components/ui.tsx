@@ -121,6 +121,7 @@ export type Field = {
   type?: string;
   required?: boolean;
   omitWhenEmpty?: boolean;
+  readOnly?: boolean;
   options?: { value: string; label: string }[];
   value?: unknown;
   min?: number;
@@ -311,6 +312,7 @@ export function FormDialog({
                         minLength={f.minLength}
                         maxLength={f.maxLength}
                         autoComplete={f.autoComplete}
+                        readOnly={f.readOnly}
                         required={f.required !== false}
                         defaultValue={String(f.value ?? "")}
                         min={f.min ?? (f.type === "number" ? 0 : undefined)}

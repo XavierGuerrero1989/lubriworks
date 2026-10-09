@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  vehicleOperations,
+  logReading,
+  protectOpenReadings,
+} from "./vehicles.js";
 import { orderOperations } from "./orderOperations.js";
 import {
   approvedLabor,
@@ -110,7 +115,11 @@ export function execute(
       });
     }
   };
-  if (orderOperations(s, member, cmd, id, now)) return s;
+  if (
+    orderOperations(s, member, cmd, id, now) ||
+    vehicleOperations(s, member, cmd, id, now)
+  )
+    return s;
   if (cmd.action === "save") {
     const collection = z
       .enum(Object.keys(schemas) as [Collection, ...Collection[]])
@@ -139,6 +148,10 @@ export function execute(
     }
     if (data.branchId) find(s.branches, data.branchId, "Sucursal");
     if (collection === "customers" && existing) {
+      requireThat(
+        data.email === (existing as any).email,
+        "El correo pertenece a su cuenta de acceso y no se modifica desde esta ficha.",
+      );
       if ((existing as any).notificationPreferences)
         data.notificationPreferences = (
           existing as any
@@ -163,27 +176,66 @@ export function execute(
           "No se puede transferir la titularidad desde este formulario.",
         );
         const v = structuredClone(existing) as Vehicle;
+        if (data.odometer !== v.odometer || data.readingDate !== v.readingDate)
+          protectOpenReadings(s, v, data.odometer, data.readingDate);
         reading(v, data.odometer, data.readingDate);
+        for (const field of [
+          "oilSpecification",
+          "oilCapacity",
+          "compatibleFilters",
+          "technicalNotes",
+        ])
+          if (
+            !Object.hasOwn(cmd.data as object, field) &&
+            (existing as any)[field] !== undefined
+          )
+            data[field] = (existing as any)[field];
         data.previousOdometer = v.previousOdometer;
         data.previousReadingDate = v.previousReadingDate;
       } else {
         data.previousOdometer = null;
         data.previousReadingDate = "";
       }
+      if (
+        !existing ||
+        data.odometer !== (existing as Vehicle).odometer ||
+        data.readingDate !== (existing as Vehicle).readingDate
+      )
+        logReading(
+          s,
+          { ...data, id: entityId } as Vehicle,
+          existing as Vehicle | undefined,
+          member,
+          id,
+          now,
+          existing ? "reading" : "initial",
+        );
       if (data.hasExtinguisher === false) data.extinguisherDue = "";
-      const fireId = `fire-${entityId}`;
-      s.reminders = s.reminders.filter((r) => r.id !== fireId);
-      if (data.extinguisherDue)
-        s.reminders.push({
-          id: fireId,
-          vehicleId: entityId,
-          customerId: data.customerId,
-          title: "Renovación de matafuegos",
-          dueDate: data.extinguisherDue,
-          dueKm: null,
-          status: "active",
-          source: "extinguisher",
-        });
+      const fireId = `fire-${entityId}`,
+        hasReminder = s.reminders.some(
+          (r) => r.vehicleId === entityId && r.source === "extinguisher",
+        );
+      if (
+        !existing ||
+        data.extinguisherDue !== (existing as Vehicle).extinguisherDue ||
+        (data.extinguisherDue && !hasReminder) ||
+        (!data.extinguisherDue && hasReminder)
+      ) {
+        s.reminders = s.reminders.filter(
+          (r) => !(r.vehicleId === entityId && r.source === "extinguisher"),
+        );
+        if (data.extinguisherDue)
+          s.reminders.push({
+            id: fireId,
+            vehicleId: entityId,
+            customerId: data.customerId,
+            title: "Renovación de matafuegos",
+            dueDate: data.extinguisherDue,
+            dueKm: null,
+            status: "active",
+            source: "extinguisher",
+          });
+      }
     }
     if (collection === "products") {
       requireThat(
@@ -541,7 +593,9 @@ export function execute(
       "Comenzá la atención antes de finalizar.",
     );
     const v = find(s.vehicles, o.vehicleId);
+    const beforeReading = structuredClone(v);
     reading(v, o.odometer, o.date);
+    logReading(s, v, beforeReading, member, id, now, "service", "", o.id);
     useStock(consumedItems(o), o.branchId, -1, `Servicio ${o.id}`);
     o.status = "ready";
     o.finishedAt = now;
@@ -723,12 +777,19 @@ export function execute(
     );
     c.closedAt = now;
   } else if (cmd.action === "reading") {
-    const v = ownVehicle(cmd.id);
+    const v = ownVehicle(cmd.id),
+      beforeReading = structuredClone(v);
     reading(
       v,
       z.number().int().min(0).max(5e6).parse(cmd.odometer),
       date.parse(cmd.date),
     );
+    protectOpenReadings(s, v, v.odometer, v.readingDate);
+    if (
+      v.odometer !== beforeReading.odometer ||
+      v.readingDate !== beforeReading.readingDate
+    )
+      logReading(s, v, beforeReading, member, id, now, "reading");
   } else if (cmd.action === "profile") {
     requireThat(role === "customer", "Acción exclusiva del portal.");
     const c = find(s.customers, member.customerId);

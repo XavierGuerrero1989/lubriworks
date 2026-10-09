@@ -1,3 +1,4 @@
+import { CustomerDesk } from "./CustomerDesk";
 import { OrderDesk } from "./OrderDesk";
 import { orderTotal, workStage } from "../../shared/orders";
 import { Agenda } from "./Agenda";
@@ -128,6 +129,7 @@ export function Workspace({
     charge = canCharge(access.member.role);
   const [receipt, setReceipt] = useState<Sale | null>(null);
   const [focusedOrder, setFocusedOrder] = useState("");
+  const [focusedVehicle, setFocusedVehicle] = useState("");
   const [tab, setTab] = useState(
       customer
         ? new URLSearchParams(location.search).get("portal") === "notifications"
@@ -316,7 +318,12 @@ export function Workspace({
     if (collection === "customers")
       fields = [
         field("name", "Nombre y apellido"),
-        field("email", "Correo electrónico", "email"),
+        field("email", "Correo electrónico", "email", {
+          readOnly: !!record,
+          hint: record
+            ? "Correo de su cuenta de acceso. Los cambios de cuenta se gestionan por separado."
+            : undefined,
+        }),
         ...(!record
           ? [
               field("password", "Contraseña de acceso", "password", {
@@ -343,7 +350,36 @@ export function Workspace({
           value: record ? vehicleYear(record as Vehicle) : undefined,
           hint: "Por ejemplo, 2020. Usamos el año para estimar el uso inicial.",
         }),
-        field("odometer", "Kilometraje real", "number", { step: "1" }),
+        field("oilSpecification", "Especificación del aceite", "text", {
+          required: false,
+          maxLength: 300,
+          hint: "Registrá viscosidad y norma confirmadas para este motor; por ejemplo, SAE / ACEA / API.",
+        }),
+        field("oilCapacity", "Capacidad de aceite (litros)", "number", {
+          required: false,
+          omitWhenEmpty: true,
+          min: 0,
+          max: 100,
+          step: "0.01",
+          hint: "Capacidad confirmada para este vehículo. Dejá vacío si no se conoce.",
+        }),
+        field("compatibleFilters", "Filtros compatibles", "textarea", {
+          required: false,
+          maxLength: 1000,
+          hint: "Códigos de filtros de aceite, aire, combustible o habitáculo confirmados.",
+        }),
+        field("technicalNotes", "Observaciones técnicas internas", "textarea", {
+          required: false,
+          maxLength: 1000,
+          hint: "Uso exclusivo del personal; las recomendaciones para compartir se cargan en la ficha.",
+        }),
+        field("odometer", "Kilometraje real", "number", {
+          step: "1",
+          min: record?.odometer ?? 0,
+          hint: record
+            ? "Para corregir una lectura equivocada, usá Corregir kilometraje en la ficha."
+            : undefined,
+        }),
         field("readingDate", "Fecha de lectura", "date", { value: today() }),
         field("hasExtinguisher", "¿Tiene matafuegos?", "text", {
           options: [
@@ -615,6 +651,7 @@ export function Workspace({
         delete data.id;
         delete data.password;
         if (collection === "vehicles") {
+          data.oilCapacity = values.oilCapacity ?? null;
           delete data.firstRegistration;
           data.hasExtinguisher = values.hasExtinguisher === "yes";
           if (!data.hasExtinguisher) data.extinguisherDue = "";
@@ -979,105 +1016,30 @@ export function Workspace({
     );
   else if (tab === "customers")
     content = (
-      <>
-        <div className="page-heading">
-          <div>
-            <h1>Clientes y vehículos</h1>
-            <p>Una historia de cuidado para cada patente.</p>
-          </div>
-          <div className="row-actions">
-            {newButton("customers", "Cliente")}
-            {newButton("vehicles", "Vehículo")}
-          </div>
-        </div>
-        <div className="toolbar">
-          <SearchBox
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar por patente, cliente o modelo…"
-          />
-          <div className="segmented">
-            <button
-              className={subtab !== "clients" ? "active" : ""}
-              onClick={() => setSubtab("vehicles")}
-            >
-              Vehículos
-            </button>
-            <button
-              className={subtab === "clients" ? "active" : ""}
-              onClick={() => setSubtab("clients")}
-            >
-              Clientes
-            </button>
-          </div>
-        </div>
-        {subtab === "clients" ? (
-          <Section title={`${s.customers.length} clientes`}>
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Cliente</th>
-                    <th>Contacto</th>
-                    <th>Vehículos</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {s.customers
-                    .filter((c) => match(c.name, c.email))
-                    .map((c) => (
-                      <tr key={c.id}>
-                        <td>
-                          <strong>{c.name}</strong>
-                        </td>
-                        <td>
-                          {c.email}
-                          <small>{c.phone}</small>
-                        </td>
-                        <td>
-                          {
-                            s.vehicles.filter((v) => v.customerId === c.id)
-                              .length
-                          }
-                        </td>
-                        <td>
-                          <button
-                            className="text-button"
-                            onClick={() => edit("customers", c)}
-                          >
-                            Editar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </Section>
-        ) : (
-          <div className="vehicle-grid">
-            {s.vehicles
-              .filter((v) =>
-                match(v.plate, v.brand, v.model, clientName(v.customerId)),
-              )
-              .map((v) => (
-                <VehicleCard
-                  key={v.id}
-                  v={v}
-                  owner={clientName(v.customerId)}
-                  onEdit={() => edit("vehicles", v)}
-                  onReading={() => readKm(v)}
-                  onHistory={() => {
-                    go("orders");
-                    setSearch(v.plate);
-                  }}
-                />
-              ))}
-            {!s.vehicles.length && <Empty text="Cargá tu primer vehículo." />}
-          </div>
-        )}
-      </>
+      <CustomerDesk
+        state={s}
+        access={access}
+        run={execute}
+        focusVehicleId={focusedVehicle}
+        onSelection={setFocusedVehicle}
+        onNewCustomer={() => edit("customers")}
+        onCustomer={(c) => edit("customers", c)}
+        onVehicle={(v, customerId) =>
+          edit("vehicles", v, customerId ? { customerId } : {})
+        }
+        onReading={readKm}
+        onOrder={(o) => {
+          setBranch("all");
+          setFocusedOrder(o.id);
+          setFocusedVehicle(o.vehicleId);
+          go("orders");
+        }}
+        onNewOrder={(v) => newOrder({ vehicleId: v.id, odometer: v.odometer })}
+        onAppointment={(v) =>
+          edit("appointments", undefined, { vehicleId: v.id })
+        }
+        onAgenda={() => go("appointments")}
+      />
     );
   else if (tab === "orders" && !customer)
     content = (
@@ -1089,6 +1051,10 @@ export function Workspace({
         focusId={focusedOrder}
         run={execute}
         onNew={() => newOrder()}
+        onVehicle={(id) => {
+          setFocusedVehicle(id);
+          go("customers");
+        }}
         onCharge={chargeOrder}
         onReceipt={(o) => setReceipt(s.sales.find((v) => v.orderId === o.id)!)}
         onRefresh={onRefresh}

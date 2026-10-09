@@ -57,6 +57,7 @@ export function OrderDesk({
   focusId,
   run,
   onNew,
+  onVehicle,
   onCharge,
   onReceipt,
   onRefresh,
@@ -68,6 +69,7 @@ export function OrderDesk({
   focusId: string;
   run: (c: Command) => Promise<void>;
   onNew: () => void;
+  onVehicle: (id: string) => void;
   onCharge: (id: string) => void;
   onReceipt: (o: Order) => void;
   onRefresh: () => Promise<void>;
@@ -254,11 +256,16 @@ export function OrderDesk({
           required: false,
           hint: "Separá los controles por coma.",
         }),
-        field("recommendations", "Recomendaciones registradas", "textarea", {
-          value: o!.recommendations ?? "",
-          required: false,
-          maxLength: 1000,
-        }),
+        field(
+          "recommendations",
+          "Recomendaciones internas del trabajo",
+          "textarea",
+          {
+            value: o!.recommendations ?? "",
+            required: false,
+            maxLength: 1000,
+          },
+        ),
       ],
       submit: async (data) =>
         run({
@@ -461,6 +468,12 @@ export function OrderDesk({
                 </div>
               </div>
               <div className="order-flow-actions">
+                <button
+                  className="button"
+                  onClick={() => onVehicle(o.vehicleId)}
+                >
+                  Ficha del vehículo
+                </button>
                 {open &&
                   technical &&
                   o.status === "received" &&
@@ -743,7 +756,7 @@ export function OrderDesk({
                     </p>
                     <p>Notas internas: {o.notes || "Sin notas"}</p>
                     <p>
-                      Recomendaciones:{" "}
+                      Recomendaciones internas del trabajo:{" "}
                       {o.recommendations || "Sin recomendaciones registradas"}
                     </p>
                   </div>

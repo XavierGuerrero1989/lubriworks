@@ -1,0 +1,58 @@
+.report-kpis,
+.report-times {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+.report-kpis > div,
+.report-times > div {
+  padding: 20px;
+  border: 1px solid var(--border, #e4eaec);
+  border-radius: 16px;
+  background: #fff;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.report-kpis span,
+.report-kpis small,
+.report-times small {
+  color: var(--muted, #6c8087);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.report-kpis strong {
+  display: block;
+  margin: 10px 0;
+  font-size: 26px;
+  color: var(--ink, #12343b);
+}
+.report-kpis small {
+  display: block;
+}
+.report-times {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.report-note {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted, #6c8087);
+  margin: 18px 0;
+}
+.report-content {
+  padding: 0 22px 22px;
+}
+.report-content p {
+  line-height: 1.6;
+}
+@media (max-width: 850px) {
+  .report-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  .report-kpis,
+  .report-times {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,3 +1,4 @@
+import { ReportsDesk } from "./ReportsDesk";
 import { ServiceDesk } from "./ServiceDesk";
 import { serviceLabel } from "../../shared/services";
 import { PurchaseDesk } from "./PurchaseDesk";
@@ -5,7 +6,6 @@ import { StockDesk } from "./StockDesk";
 import { availableStock, reservedStock } from "../../shared/inventory";
 import { BillingDialog, type Checkout } from "./BillingDialog";
 import { SalesDesk } from "./SalesDesk";
-import { collectedByMethod } from "../../shared/billing";
 import { CustomerDesk } from "./CustomerDesk";
 import { OrderDesk } from "./OrderDesk";
 import { orderTotal, workStage } from "../../shared/orders";
@@ -151,9 +151,7 @@ export function Workspace({
     [dialog, setDialog] = useState<Dialog | null>(null),
     [notice, setNotice] = useState(""),
     [mobile, setMobile] = useState(false),
-    [subtab, setSubtab] = useState(""),
-    [dateFrom, setDateFrom] = useState(today().slice(0, 7) + "-01"),
-    [dateTo, setDateTo] = useState(today());
+    [subtab, setSubtab] = useState("");
   const go = (id: string) => {
     setTab(id);
     setSearch("");
@@ -1261,162 +1259,17 @@ export function Workspace({
       />
     );
   } else if (tab === "reports") {
-    const period = sales.filter(
-        (x) => x.date.slice(0, 10) >= dateFrom && x.date.slice(0, 10) <= dateTo,
-      ),
-      total = period.reduce((n, x) => n + x.total, 0),
-      cost = period.reduce((n, x) => n + x.cost, 0);
-    const popular = s.services
-      .map((v) => ({
-        name: v.name,
-        count: orders.filter(
-          (o) =>
-            o.serviceId === v.id &&
-            o.status === "paid" &&
-            o.date >= dateFrom &&
-            o.date <= dateTo,
-        ).length,
-      }))
-      .sort((a, b) => b.count - a.count);
     content = (
-      <>
-        <div className="page-heading">
-          <div>
-            <h1>Reportes</h1>
-            <p>Datos reales de tus operaciones y del movimiento del taller.</p>
-          </div>
-          <button
-            className="button secondary"
-            onClick={() =>
-              exportCsv(
-                "lubriworks-reporte.csv",
-                period.map((v) => ({
-                  Fecha: v.date,
-                  Venta: v.total,
-                  Costo: v.cost,
-                  Margen: v.total - v.cost,
-                  Medio: v.method,
-                })),
-              )
-            }
-          >
-            <Download size={17} />
-            Exportar
-          </button>
-        </div>
-        <div className="toolbar">
-          <label>
-            Desde{" "}
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
-          </label>
-          <label>
-            Hasta{" "}
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-          </label>
-        </div>
-        <div className="stats">
-          <Stat
-            label="Ventas del período"
-            value={money(total)}
-            detail={`${period.length} operaciones`}
-            icon={<Wallet size={20} />}
-          />
-          <Stat
-            label="Margen bruto"
-            value={money(total - cost)}
-            detail="Antes de gastos y costo laboral"
-            icon={<BarChart3 size={20} />}
-          />
-          <Stat
-            label="Ticket promedio"
-            value={money(period.length ? total / period.length : 0)}
-            detail="Por operación cobrada"
-            icon={<ClipboardList size={20} />}
-          />
-          <Stat
-            label="Clientes recurrentes"
-            value={
-              s.customers.filter(
-                (c) =>
-                  s.orders.filter(
-                    (o) => o.customerId === c.id && o.status === "paid",
-                  ).length > 1,
-              ).length
-            }
-            detail="Con más de un servicio cobrado, histórico"
-            icon={<Users size={20} />}
-          />
-        </div>
-        <div className="dashboard-bottom">
-          <Section
-            title="Servicios más realizados"
-            subtitle="Servicios cobrados del período"
-          >
-            <div className="bars">
-              {popular.map((p) => (
-                <div className="bar-item" key={p.name}>
-                  <div>
-                    <span>{p.name}</span>
-                    <strong>{p.count}</strong>
-                  </div>
-                  <div className="bar-track">
-                    <i
-                      style={{
-                        width: `${(p.count / Math.max(1, ...popular.map((p) => p.count))) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Section>
-          <Section title="Medios de pago">
-            <div className="bars">
-              {(["cash", "transfer", "card"] as const).map((method) => (
-                <div className="payment-row" key={method}>
-                  <Badge value={method} />
-                  <strong>
-                    {money(
-                      collectedByMethod(s, method, dateFrom, dateTo, branch),
-                    )}
-                  </strong>
-                </div>
-              ))}
-            </div>
-          </Section>
-        </div>
-        <Section title="Servicios por técnico">
-          <div className="bars">
-            {[...new Set(orders.map((o) => o.technician || "Sin asignar"))].map(
-              (name) => (
-                <div className="payment-row" key={name}>
-                  <span>{name}</span>
-                  <strong>
-                    {
-                      orders.filter(
-                        (o) =>
-                          (o.technician || "Sin asignar") === name &&
-                          ["ready", "paid"].includes(o.status) &&
-                          o.date >= dateFrom &&
-                          o.date <= dateTo,
-                      ).length
-                    }{" "}
-                    finalizados
-                  </strong>
-                </div>
-              ),
-            )}
-          </div>
-        </Section>
-      </>
+      <ReportsDesk
+        s={s}
+        branch={branch}
+        onReceipt={setReceipt}
+        onOrder={(id) => {
+          setFocusedOrder(id);
+          setBranch("all");
+          go("orders");
+        }}
+      />
     );
   } else if (tab === "settings")
     content = (

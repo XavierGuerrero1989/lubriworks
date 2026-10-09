@@ -263,14 +263,15 @@ export const guides: HelpGuide[] = [
     section: "reports",
     title: "¿Cómo consulto los reportes?",
     keywords:
-      "reporte estadistica ventas periodo facturacion indicadores informe exportar",
+      "reporte estadistica ventas cobros saldo deuda periodo indicadores informe tiempos tecnico clientes turnos exportar",
     steps: [
-      "Entrá a Reportes y elegí el período que querés consultar.",
-      "Revisá ventas, medios de pago y los resultados de las operaciones registradas.",
-      "Usá el filtro de sucursal para consultar una sede.",
-      "Exportá los datos disponibles para analizarlos fuera del sistema.",
+      "Entrá a Reportes, elegí Desde y Hasta y usá el filtro de sucursal si querés consultar una sede.",
+      "En Resultados, consultá ventas, cobros netos, margen, ticket, evolución y servicios realizados. Los indicadores comparan con el período anterior de igual duración.",
+      "En Atención, revisá espera, trabajo, demora hasta la entrega y permanencia; cada tiempo indica cuántas órdenes tienen horarios válidos. Podés abrir una orden desde el detalle.",
+      "En Clientes y turnos, consultá clientes atendidos, visitas anteriores, autorizaciones y los estados actuales de los turnos del período.",
+      "En Ventas y saldos, revisá ventas, movimientos de cobro y deudas al cierre del período, incluidas ventas anteriores. Exportá indicadores o el CSV de cada tabla.",
     ],
-    note: "Los resultados dependen de las operaciones que se hayan cargado en LubriWorks.",
+    note: "Las ventas se cuentan por fecha de registro y los cobros por fecha del movimiento, descontando reversiones. El saldo corresponde al cierre del último día en horario de Argentina; un pago posterior puede haberlo cancelado hoy. El margen no descuenta gastos ni costo laboral. No se inventan horarios, autorizaciones ni ausencias para registros antiguos.",
     destination: "reports",
   },
   {

@@ -1433,4 +1433,257 @@ describe("real API + Auth / Firestore emulators", () => {
       staff.data.state.vehicleReadings.some((r: any) => r.id === operation),
     ).toBe(true);
   });
+  it("persists partial/composite payments once, prevents concurrent overpayment and audits reversals", async () => {
+    const { db } = admin(),
+      seed = demoState(),
+      o = {
+        ...seed.orders[0],
+        id: "ot-billing",
+        status: "ready",
+        workStatus: "ready",
+        paymentStatus: "unpaid",
+      };
+    await db.doc("tenants/alpha/orders/ot-billing").set(o);
+    const command = (
+      payload: Record<string, unknown>,
+      operationId = crypto.randomUUID(),
+      token = ownerToken,
+      tenant = "alpha",
+    ) => call(token, "command", payload, tenant, operationId);
+    const firstId = crypto.randomUUID(),
+      first = {
+        action: "chargeOrder",
+        id: o.id,
+        payments: [
+          { method: "cash", amount: 1000 },
+          { method: "transfer", amount: 2000 },
+        ],
+      };
+    const pair = await Promise.all([
+      command(first, firstId),
+      command(first, firstId),
+    ]);
+    expect(pair.map((r) => r.status)).toEqual([200, 200]);
+    const sales = await db
+      .collection("tenants/alpha/sales")
+      .where("orderId", "==", o.id)
+      .get();
+    expect(sales.size).toBe(1);
+    const sale = sales.docs[0],
+      total = sale.data().total;
+    expect(
+      (
+        await db
+          .collection("tenants/alpha/payments")
+          .where("saleId", "==", sale.id)
+          .get()
+      ).size,
+    ).toBe(2);
+    expect(
+      (await db.doc(`tenants/alpha/orders/${o.id}`).get()).data()
+        ?.paymentStatus,
+    ).toBe("partial");
+    expect((await command({ action: "deliverOrder", id: o.id })).status).toBe(
+      400,
+    );
+    expect(
+      (
+        await command(
+          {
+            action: "sale.pay",
+            id: sale.id,
+            payments: [{ method: "cash", amount: 1 }],
+          },
+          crypto.randomUUID(),
+          clientToken,
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await command(
+          {
+            action: "sale.pay",
+            id: sale.id,
+            payments: [{ method: "cash", amount: 1 }],
+          },
+          crypto.randomUUID(),
+          otherToken,
+          "beta",
+        )
+      ).status,
+    ).toBe(400);
+    const concurrent = await Promise.all([
+      command({
+        action: "sale.pay",
+        id: sale.id,
+        payments: [{ method: "card", amount: total - 3000 }],
+      }),
+      command({
+        action: "sale.pay",
+        id: sale.id,
+        payments: [{ method: "card", amount: total - 3000 }],
+      }),
+    ]);
+    expect(concurrent.map((r) => r.status).sort()).toEqual([200, 400]);
+    expect(
+      (
+        await db
+          .collection("tenants/alpha/payments")
+          .where("saleId", "==", sale.id)
+          .get()
+      ).size,
+    ).toBe(3);
+    const p = (
+      await db
+        .collection("tenants/alpha/payments")
+        .where("saleId", "==", sale.id)
+        .get()
+    ).docs.find((d) => d.data().method === "cash")!;
+    const reverseId = crypto.randomUUID(),
+      reverse = {
+        action: "payment.reverse",
+        id: p.id,
+        reason: "Corregir medio registrado",
+      };
+    expect((await command({ ...reverse, reason: "" })).status).toBe(400);
+    const reversed = await Promise.all([
+      command(reverse, reverseId),
+      command(reverse, reverseId),
+    ]);
+    expect(reversed.map((r) => r.status)).toEqual([200, 200]);
+    expect(
+      (
+        await db
+          .collection("tenants/alpha/payments")
+          .where("reversesId", "==", p.id)
+          .get()
+      ).size,
+    ).toBe(1);
+    expect((await command(reverse)).status).toBe(400);
+    expect(
+      (await db.doc(`tenants/alpha/orders/${o.id}`).get()).data()
+        ?.paymentStatus,
+    ).toBe("partial");
+    const snapshot = await call(clientToken, "snapshot");
+    expect(snapshot.status).toBe(200);
+    const customerPayments = snapshot.data.state.payments;
+    expect(customerPayments.some((r: any) => r.saleId === sale.id)).toBe(true);
+    expect(
+      customerPayments.every(
+        (r: any) =>
+          r.customerId === "c1" && !r.reason && !r.reference && !r.actorName,
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await command({
+          action: "sale.discount",
+          id: sale.id,
+          discount: 100,
+          reason: "Promoción autorizada",
+        })
+      ).status,
+    ).toBe(200);
+    const p0 = seed.products[0],
+      stock = (await db.doc(`tenants/alpha/products/${p0.id}`).get()).data()!
+        .stock,
+      counterId = crypto.randomUUID();
+    const counter = {
+      action: "sale",
+      branchId: p0.branchId,
+      customerId: "c1",
+      vehicleId: "v1",
+      items: [{ productId: p0.id, quantity: 1 }],
+      payments: [],
+    };
+    expect((await command(counter, counterId)).status).toBe(200);
+    expect((await command(counter, counterId)).status).toBe(200);
+    expect(
+      (await db.doc(`tenants/alpha/products/${p0.id}`).get()).data()?.stock,
+    ).toBe(stock - 1);
+    expect(
+      (await db.doc(`tenants/alpha/sales/${counterId}`).get()).data()
+        ?.vehicleId,
+    ).toBe("v1");
+    expect(
+      (
+        await command({
+          action: "sale.pay",
+          id: counterId,
+          payments: [{ method: "cash", amount: 1000 }],
+        })
+      ).status,
+    ).toBe(200);
+    const active = (
+      await db
+        .collection("tenants/alpha/cash")
+        .where("branchId", "==", p0.branchId)
+        .get()
+    ).docs.find((d) => !d.data().closedAt)!;
+    const activeData = active.data(),
+      cashPayments = (
+        await db
+          .collection("tenants/alpha/payments")
+          .where("cashSessionId", "==", active.id)
+          .get()
+      ).docs.map((d) => d.data()),
+      legacy = (
+        await db
+          .collection("tenants/alpha/sales")
+          .where("branchId", "==", p0.branchId)
+          .get()
+      ).docs.map((d) => d.data());
+    const expected =
+      activeData.opening +
+      cashPayments
+        .filter((p) => p.method === "cash")
+        .reduce((n, p) => n + (p.kind === "refund" ? -p.amount : p.amount), 0) +
+      legacy
+        .filter(
+          (v) =>
+            !v.billingVersion &&
+            v.method === "cash" &&
+            v.date >= activeData.openedAt,
+        )
+        .reduce((n, v) => n + v.total, 0);
+    expect(
+      (await command({ action: "closeCash", id: active.id, counted: expected }))
+        .status,
+    ).toBe(200);
+    const closed = (await active.ref.get()).data();
+    expect(closed?.expected).toBe(expected);
+    const newCash = crypto.randomUUID();
+    expect(
+      (
+        await command(
+          { action: "openCash", branchId: p0.branchId, opening: 5000 },
+          newCash,
+        )
+      ).status,
+    ).toBe(200);
+    const counterPayment = (
+      await db
+        .collection("tenants/alpha/payments")
+        .where("saleId", "==", counterId)
+        .get()
+    ).docs[0];
+    expect(
+      (
+        await command({
+          action: "payment.reverse",
+          id: counterPayment.id,
+          reason: "Prueba devolución de efectivo",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await active.ref.get()).data()).toEqual(closed);
+    expect(
+      (await command({ action: "closeCash", id: newCash, counted: 4000 }))
+        .status,
+    ).toBe(200);
+    expect(
+      (await db.doc(`tenants/alpha/cash/${newCash}`).get()).data()?.expected,
+    ).toBe(4000);
+  });
 });

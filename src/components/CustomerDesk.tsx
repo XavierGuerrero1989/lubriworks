@@ -1,3 +1,4 @@
+import { paymentLabel } from "../../shared/billing";
 import { useState } from "react";
 import {
   canManage,
@@ -479,7 +480,7 @@ export function CustomerDesk({
                         {o.technician || "Sin técnico asignado"}
                       </p>
                       <Badge value={workStage(o)} />{" "}
-                      <Badge value={o.status === "paid" ? "paid" : "unpaid"} />
+                      <Badge value={paymentLabel(o)} />
                     </div>
                     <div>
                       <strong>{money(orderTotal(o))}</strong>
@@ -632,9 +633,7 @@ export function CustomerDesk({
                       <td>{number(o.odometer)}</td>
                       <td>
                         <Badge value={workStage(o)} />{" "}
-                        <Badge
-                          value={o.status === "paid" ? "paid" : "unpaid"}
-                        />
+                        <Badge value={paymentLabel(o)} />
                       </td>
                       <td>{money(orderTotal(o))}</td>
                       <td>

@@ -1,13 +1,18 @@
 import { Printer, X } from "lucide-react";
-import type { Sale } from "../../shared/model";
+import { salePaid, saleBalance, paymentValue } from "../../shared/billing";
+import type { State, Sale } from "../../shared/model";
 import { fmtDate, money, number, labels } from "./ui";
 export function Receipt({
   sale,
+  state,
+  vehicle,
   company,
   client,
   onClose,
 }: {
   sale: Sale;
+  state: State;
+  vehicle: string;
   company: string;
   client: string;
   onClose: () => void;
@@ -44,33 +49,84 @@ export function Receipt({
             <dd>{fmtDate(sale.date)}</dd>
             <dt>Cliente</dt>
             <dd>{client}</dd>
+            {vehicle && (
+              <>
+                <dt>Vehículo</dt>
+                <dd>{vehicle}</dd>
+              </>
+            )}
             <dt>Medio de pago</dt>
             <dd>{labels[sale.method]}</dd>
           </dl>
-          <table>
-            <thead>
-              <tr>
-                <th>Concepto</th>
-                <th>Cantidad</th>
-                <th>Precio unitario</th>
-                <th>Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sale.items.map((i, index) => (
-                <tr key={index}>
-                  <td>{i.name}</td>
-                  <td>{number(i.quantity)}</td>
-                  <td>{money(i.price)}</td>
-                  <td>{money(i.quantity * i.price)}</td>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Concepto</th>
+                  <th>Cantidad</th>
+                  <th>Precio unitario</th>
+                  <th>Subtotal</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {sale.items.map((i, index) => (
+                  <tr key={index}>
+                    <td>{i.name}</td>
+                    <td>{number(i.quantity)}</td>
+                    <td>{money(i.price)}</td>
+                    <td>{money(i.quantity * i.price)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="receipt-total">
-            <span>Total abonado</span>
+            <span>Total de la venta</span>
             <strong>{money(sale.total)}</strong>
           </div>
+          {!!sale.discount && (
+            <p>
+              Subtotal {money(sale.subtotal ?? sale.total)} · Descuento{" "}
+              {money(sale.discount)}
+            </p>
+          )}
+          <div className="receipt-total">
+            <span>Total cobrado</span>
+            <strong>{money(salePaid(state, sale))}</strong>
+          </div>
+          <div className="receipt-total">
+            <span>Saldo pendiente</span>
+            <strong>{money(saleBalance(state, sale))}</strong>
+          </div>
+          {sale.billingVersion && (
+            <>
+              <h3>Cobros y reversiones</h3>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Medio</th>
+                      <th>Movimiento</th>
+                      <th>Importe</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.payments
+                      .filter((p) => p.saleId === sale.id)
+                      .map((p) => (
+                        <tr key={p.id}>
+                          <td>{fmtDate(p.date)}</td>
+                          <td>{labels[p.method]}</td>
+                          <td>{p.kind === "refund" ? "Reversión" : "Cobro"}</td>
+                          <td>{money(paymentValue(p))}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
           <p>Gracias por confiar el cuidado de tu vehículo a {company}.</p>
         </div>
       </section>

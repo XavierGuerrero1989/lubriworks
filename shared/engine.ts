@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { billingOperations, cashExpected } from "./billing.js";
 import {
   vehicleOperations,
   logReading,
@@ -117,7 +118,8 @@ export function execute(
   };
   if (
     orderOperations(s, member, cmd, id, now) ||
-    vehicleOperations(s, member, cmd, id, now)
+    vehicleOperations(s, member, cmd, id, now) ||
+    billingOperations(s, member, cmd, id, now, useStock)
   )
     return s;
   if (cmd.action === "save") {
@@ -641,80 +643,6 @@ export function execute(
           source: snapshot.serviceId,
         });
       }
-  } else if (cmd.action === "chargeOrder" || cmd.action === "sale") {
-    requireThat(cashier, "Tu rol no permite cobrar.");
-    const method = z.enum(["cash", "transfer", "card"]).parse(cmd.method);
-    let branchId: string,
-      customerId: string | null = null,
-      orderId: string | null = null,
-      total = 0,
-      cost = 0,
-      items: { name: string; quantity: number; price: number }[] = [];
-    if (cmd.action === "chargeOrder") {
-      const o = find(s.orders, cmd.id, "Orden");
-      requireThat(
-        o.status === "ready",
-        "La orden debe estar finalizada y sin cobrar.",
-      );
-      branchId = o.branchId;
-      customerId = o.customerId;
-      orderId = o.id;
-      items = billingItems(o).map((i) => ({
-        name: i.name || find(s.products, i.productId).name,
-        quantity: i.quantity,
-        price: i.price,
-      }));
-      items.push({
-        name: "Mano de obra",
-        quantity: 1,
-        price: approvedLabor(o),
-      });
-      total = round(items.reduce((n, i) => n + i.quantity * i.price, 0));
-      cost = round(
-        consumedItems(o).reduce((n, i) => n + i.quantity * i.cost, 0),
-      );
-      o.status = "paid";
-      o.paymentStatus = "paid";
-      o.workStatus = "ready";
-      orderEvent(o, id, "Cobro registrado", member.uid, now, "", member.name);
-    } else {
-      branchId = key.parse(cmd.branchId);
-      find(s.branches, branchId);
-      const lines = z
-        .array(
-          z.object({
-            productId: key,
-            quantity: z.number().positive().max(1000),
-          }),
-        )
-        .min(1)
-        .max(30)
-        .parse(cmd.items);
-      for (const i of lines) {
-        const p = find(s.products, i.productId);
-        items.push({ name: p.name, quantity: i.quantity, price: p.price });
-        total += i.quantity * p.price;
-        cost += i.quantity * p.cost;
-      }
-      total = round(total);
-      cost = round(cost);
-      useStock(lines, branchId, -1, "Venta directa");
-    }
-    requireThat(
-      s.cash.some((c) => c.branchId === branchId && !c.closedAt),
-      "Abrí la caja de esta sucursal antes de cobrar.",
-    );
-    s.sales.push({
-      id,
-      branchId,
-      customerId,
-      orderId,
-      date: now,
-      total,
-      cost,
-      method,
-      items,
-    });
   } else if (cmd.action === "receivePurchase") {
     requireThat(manager, "Sólo administración puede recibir compras.");
     const p = find(s.purchases, cmd.id, "Compra");
@@ -764,17 +692,7 @@ export function execute(
     const c = find(s.cash, cmd.id);
     requireThat(!c.closedAt, "La caja ya está cerrada.");
     c.counted = z.number().min(0).max(1e10).parse(cmd.counted);
-    c.expected = round(
-      c.opening +
-        s.sales
-          .filter(
-            (a) =>
-              a.branchId === c.branchId &&
-              a.date >= c.openedAt &&
-              a.method === "cash",
-          )
-          .reduce((n, a) => n + a.total, 0),
-    );
+    c.expected = cashExpected(s, c);
     c.closedAt = now;
   } else if (cmd.action === "reading") {
     const v = ownVehicle(cmd.id),

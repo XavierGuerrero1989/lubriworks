@@ -210,7 +210,7 @@ export const schemas = {
         "cancelled",
       ])
       .optional(),
-    paymentStatus: z.enum(["unpaid", "paid"]).optional(),
+    paymentStatus: z.enum(["unpaid", "partial", "paid"]).optional(),
     quoteRevision: z.number().int().min(1).optional(),
     approvalHistory: z
       .array(
@@ -321,8 +321,37 @@ export type Sale = {
   date: string;
   total: number;
   cost: number;
-  method: "cash" | "transfer" | "card";
+  method: "cash" | "transfer" | "card" | "mixed";
+  billingVersion?: 1;
+  vehicleId?: string | null;
+  subtotal?: number;
+  discount?: number;
+  adjustments?: {
+    id: string;
+    date: string;
+    by: string;
+    actorName: string;
+    reason: string;
+    beforeDiscount: number;
+    discount: number;
+  }[];
   items: { name: string; quantity: number; price: number }[];
+};
+export type Payment = {
+  id: string;
+  saleId: string;
+  customerId: string | null;
+  branchId: string;
+  cashSessionId: string;
+  kind: "receipt" | "refund";
+  date: string;
+  by: string;
+  actorName: string;
+  reason: string;
+  method: "cash" | "transfer" | "card";
+  amount: number;
+  reference: string;
+  reversesId?: string;
 };
 export type CashSession = {
   id: string;
@@ -386,6 +415,7 @@ export type VehicleRecommendation = {
 export type State = { [K in Collection]: Entity<K>[] } & {
   reminders: Reminder[];
   sales: Sale[];
+  payments: Payment[];
   cash: CashSession[];
   movements: Movement[];
   notifications: Notice[];
@@ -404,6 +434,7 @@ export const collections = [
   "purchases",
   "reminders",
   "sales",
+  "payments",
   "cash",
   "movements",
   "notifications",
@@ -452,6 +483,7 @@ export function visibleCollections(role: Role): StateCollection[] {
       "reminders",
       "notifications",
       "sales",
+      "payments",
     ];
   if (role === "technician")
     return [
@@ -476,6 +508,7 @@ export function visibleCollections(role: Role): StateCollection[] {
       "services",
       "products",
       "sales",
+      "payments",
       "cash",
       "reminders",
       "vehicleReadings",
@@ -514,7 +547,14 @@ export function projectState(state: State, member: Member): State {
       actualItems: o.actualItems?.map((i) => ({ ...i, cost: 0 })),
       items: o.items.map((i) => ({ ...i, cost: 0 })),
     }));
-    out.sales = out.sales.map((s) => ({ ...s, cost: 0 }));
+    out.sales = out.sales.map((s) => ({ ...s, cost: 0, adjustments: [] }));
+    out.payments = out.payments.map((p) => ({
+      ...p,
+      by: "",
+      actorName: "",
+      reason: "",
+      reference: "",
+    }));
   }
   if (!canManage(member.role)) {
     out.products = out.products.map((p) => ({ ...p, cost: 0 }));

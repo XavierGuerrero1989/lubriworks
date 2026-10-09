@@ -208,14 +208,15 @@ export const guides: HelpGuide[] = [
     section: "sales",
     title: "¿Cómo cobro y cierro la caja?",
     keywords:
-      "venta vender cobrar caja efectivo transferencia tarjeta pago cierre apertura",
+      "venta cobrar caja efectivo transferencia tarjeta combinado parcial saldo descuento corregir revertir comprobante",
     steps: [
-      "En Ventas y caja, abrí la caja de la sucursal y cargá el saldo inicial.",
-      "Cobrá una orden lista o registrá una venta con sus productos.",
-      "Elegí efectivo, transferencia o tarjeta según el pago recibido.",
-      "Al finalizar el día, cerrá la caja ingresando el efectivo contado y revisá la diferencia.",
+      "Abrí la caja de la sucursal e ingresá el efectivo inicial. La cola de cobro reúne los servicios finalizados con saldo.",
+      "Cobrar saldo permite ingresar efectivo, transferencia y tarjeta juntos o cobrar una parte. Registrá lo recibido; en efectivo, el importe retenido después del vuelto. La entrega requiere cancelar el saldo.",
+      "Nueva venta permite vincular productos con cliente y vehículo. Para dejar deuda, seleccioná un cliente; se descuenta stock una sola vez.",
+      "En Ver venta y cobros consultá saldo, pagos y comprobante. Administración/encargado puede autorizar descuentos con motivo y revertir un pago registrado, conservando el original. Las reversiones requieren caja abierta y reflejan la devolución o corrección real del cobro.",
+      "El cierre compara efectivo contado con apertura más cobros en efectivo menos reversiones de esa caja. Transferencias y tarjetas no se suman al efectivo.",
     ],
-    note: "El sistema registra el pago informado; no procesa pagos bancarios ni emite facturas fiscales.",
+    note: "Los comprobantes anteriores se conservan como ventas cobradas. El sistema registra pagos; no procesa transferencias, tarjetas ni devoluciones bancarias. Un descuento que deje un total inferior a lo cobrado requiere revertir primero el importe excedente.",
     destination: "sales",
   },
   {

@@ -179,7 +179,15 @@ export async function loadCommandState(
             .where("vehicleId", "==", o.vehicleId)
             .where("status", "==", "active"),
         );
-      } else await openCash(o.branchId);
+      } else {
+        await openCash(o.branchId);
+        await query("sales", col("sales").where("orderId", "==", o.id));
+        for (const sale of s.sales)
+          await query(
+            "payments",
+            col("payments").where("saleId", "==", sale.id),
+          );
+      }
     }
   } else if (cmd.action === "startOrder" || cmd.action === "deliverOrder") {
     const order = await doc("orders", cmd.id);
@@ -208,9 +216,26 @@ export async function loadCommandState(
       await products(cmd.items as any[]);
     if (cmd.action === "order.cancel" && o?.appointmentId)
       await doc("appointments", o.appointmentId);
+  } else if (
+    cmd.action === "sale.pay" ||
+    cmd.action === "sale.discount" ||
+    cmd.action === "payment.reverse"
+  ) {
+    const payment =
+      cmd.action === "payment.reverse"
+        ? await doc("payments", cmd.id)
+        : undefined;
+    const sale = await doc("sales", payment?.saleId || cmd.id);
+    if (sale) {
+      await query("payments", col("payments").where("saleId", "==", sale.id));
+      await openCash(sale.branchId);
+      if (sale.orderId) await doc("orders", sale.orderId);
+    }
   } else if (cmd.action === "sale") {
     await doc("branches", cmd.branchId);
     await products(cmd.items as any[]);
+    if (cmd.customerId) await doc("customers", cmd.customerId);
+    if (cmd.vehicleId) await doc("vehicles", cmd.vehicleId);
     await openCash(key.parse(cmd.branchId));
   } else if (cmd.action === "receivePurchase") {
     const p = await doc("purchases", cmd.id);
@@ -221,11 +246,16 @@ export async function loadCommandState(
     await openCash(key.parse(cmd.branchId));
   } else if (cmd.action === "closeCash") {
     const c = await doc("cash", cmd.id);
-    if (c)
+    if (c) {
+      await query(
+        "payments",
+        col("payments").where("cashSessionId", "==", c.id),
+      );
       await query(
         "sales",
         col("sales").where("date", ">=", c.openedAt).orderBy("date"),
       );
+    }
   } else if (cmd.action === "reading" || cmd.action.startsWith("vehicle.")) {
     await doc("vehicles", cmd.id);
     await query("orders", col("orders").where("vehicleId", "==", cmd.id));

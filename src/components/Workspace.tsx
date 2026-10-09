@@ -1,3 +1,6 @@
+import { BillingDialog, type Checkout } from "./BillingDialog";
+import { SalesDesk } from "./SalesDesk";
+import { collectedByMethod } from "../../shared/billing";
 import { CustomerDesk } from "./CustomerDesk";
 import { OrderDesk } from "./OrderDesk";
 import { orderTotal, workStage } from "../../shared/orders";
@@ -127,6 +130,7 @@ export function Workspace({
   const customer = access.member.role === "customer",
     manager = canManage(access.member.role),
     charge = canCharge(access.member.role);
+  const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [receipt, setReceipt] = useState<Sale | null>(null);
   const [focusedOrder, setFocusedOrder] = useState("");
   const [focusedVehicle, setFocusedVehicle] = useState("");
@@ -692,22 +696,7 @@ export function Workspace({
       {label}
     </button>
   );
-  const chargeOrder = (id: string) =>
-    setDialog({
-      title: "Cobrar servicio",
-      description: "La venta se registrará en la caja abierta de la sucursal.",
-      fields: [
-        field("method", "Medio de pago", "text", {
-          options: [
-            { value: "cash", label: "Efectivo" },
-            { value: "transfer", label: "Transferencia" },
-            { value: "card", label: "Tarjeta" },
-          ],
-          value: "cash",
-        }),
-      ],
-      submit: async (data) => execute({ action: "chargeOrder", id, ...data }),
-    });
+  const chargeOrder = (id: string) => setCheckout({ orderId: id });
   const receiveAppointment = (appointment: State["appointments"][number]) => {
     const vehicle = s.vehicles.find((v) => v.id === appointment.vehicleId);
     edit("orders", undefined, {
@@ -1456,212 +1445,22 @@ export function Workspace({
       </>
     );
   else if (tab === "sales") {
-    const open = scoped(s.cash).filter((c) => !c.closedAt);
     content = (
-      <>
-        <div className="page-heading">
-          <div>
-            <h1>Ventas y caja</h1>
-            <p>Cobros de servicios y ventas de mostrador.</p>
-          </div>
-          {charge && (
-            <div className="row-actions">
-              <button
-                className="button secondary"
-                onClick={() =>
-                  setDialog({
-                    title: "Abrir caja",
-                    fields: [
-                      field("branchId", "Sucursal", "text", {
-                        options: opts("branches"),
-                        value: defaultBranch,
-                      }),
-                      field("opening", "Efectivo inicial", "number", {
-                        value: 0,
-                      }),
-                    ],
-                    submit: async (data) =>
-                      execute({ action: "openCash", ...data }),
-                  })
-                }
-              >
-                Abrir caja
-              </button>
-              <button
-                className="button primary"
-                onClick={() =>
-                  setDialog({
-                    title: "Venta de mostrador",
-                    description: "Los precios y el stock se validan al cobrar.",
-                    fields: [
-                      field("branchId", "Sucursal", "text", {
-                        options: opts("branches"),
-                        value: defaultBranch,
-                      }),
-                      field("items", "Productos y cantidades", "lines", {
-                        options: opts("products"),
-                        value: [],
-                      }),
-                      field("method", "Medio de pago", "text", {
-                        options: [
-                          { value: "cash", label: "Efectivo" },
-                          { value: "transfer", label: "Transferencia" },
-                          { value: "card", label: "Tarjeta" },
-                        ],
-                        value: "cash",
-                      }),
-                    ],
-                    submitLabel: "Cobrar venta",
-                    submit: async (data) =>
-                      execute({ action: "sale", ...data }),
-                  })
-                }
-              >
-                <Plus size={17} />
-                Nueva venta
-              </button>
-            </div>
-          )}
-        </div>
-        <div className="cash-grid">
-          {open.map((c) => (
-            <div className="panel cash-card" key={c.id}>
-              <span className="badge ok">Caja abierta</span>
-              <h2>{branchName(c.branchId)}</h2>
-              <p>Efectivo esperado</p>
-              <strong>
-                {money(
-                  c.opening +
-                    s.sales
-                      .filter(
-                        (a) =>
-                          a.branchId === c.branchId &&
-                          a.date >= c.openedAt &&
-                          a.method === "cash",
-                      )
-                      .reduce((n, a) => n + a.total, 0),
-                )}
-              </strong>
-              <small>Apertura: {money(c.opening)}</small>
-              {charge && (
-                <button
-                  className="button secondary"
-                  onClick={() =>
-                    setDialog({
-                      title: `Cerrar caja · ${branchName(c.branchId)}`,
-                      fields: [field("counted", "Efectivo contado", "number")],
-                      submit: async (data) =>
-                        execute({ action: "closeCash", id: c.id, ...data }),
-                    })
-                  }
-                >
-                  Cerrar caja
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        {!open.length && (
-          <p className="warning-box">
-            No hay cajas abiertas en esta selección. Abrí una para registrar
-            cobros.
-          </p>
-        )}
-        <Section
-          title="Ventas registradas"
-          action={
-            <button
-              className="button secondary small"
-              onClick={() =>
-                exportCsv(
-                  "lubriworks-ventas.csv",
-                  sales.map((x) => ({
-                    Fecha: x.date,
-                    Total: x.total,
-                    Medio: x.method,
-                    Sucursal: branchName(x.branchId),
-                  })),
-                )
-              }
-            >
-              <Download size={15} />
-              Exportar
-            </button>
-          }
-        >
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Cliente / concepto</th>
-                  <th>Medio de pago</th>
-                  <th>Total</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {sales
-                  .slice()
-                  .reverse()
-                  .map((v) => (
-                    <tr key={v.id}>
-                      <td>{fmtDate(v.date)}</td>
-                      <td>
-                        {clientName(v.customerId)}
-                        <small>
-                          {v.orderId
-                            ? "Orden de servicio"
-                            : v.items.map((i) => i.name).join(", ")}
-                        </small>
-                      </td>
-                      <td>
-                        <Badge value={v.method} />
-                      </td>
-                      <td className="numeric">{money(v.total)}</td>
-                      <td>
-                        <button
-                          className="text-button"
-                          onClick={() => setReceipt(v)}
-                        >
-                          Comprobante
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </Section>
-        <Section title="Cierres de caja">
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Sucursal</th>
-                  <th>Cierre</th>
-                  <th>Esperado</th>
-                  <th>Contado</th>
-                  <th>Diferencia</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scoped(s.cash)
-                  .filter((c) => c.closedAt)
-                  .map((c) => (
-                    <tr key={c.id}>
-                      <td>{branchName(c.branchId)}</td>
-                      <td>{fmtDate(c.closedAt!)}</td>
-                      <td>{money(c.expected || 0)}</td>
-                      <td>{money(c.counted || 0)}</td>
-                      <td>{money((c.counted || 0) - (c.expected || 0))}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </Section>
-      </>
+      <SalesDesk
+        s={s}
+        branch={branch}
+        manager={manager}
+        execute={execute}
+        onCharge={chargeOrder}
+        onSalePay={(saleId) => setCheckout({ saleId })}
+        onNewSale={() => setCheckout({ branchId: defaultBranch })}
+        onReceipt={setReceipt}
+        onOrder={(id) => {
+          setFocusedOrder(id);
+          setBranch("all");
+          go("orders");
+        }}
+      />
     );
   } else if (tab === "reports") {
     const period = sales.filter(
@@ -1788,9 +1587,7 @@ export function Workspace({
                   <Badge value={method} />
                   <strong>
                     {money(
-                      period
-                        .filter((x) => x.method === method)
-                        .reduce((n, x) => n + x.total, 0),
+                      collectedByMethod(s, method, dateFrom, dateTo, branch),
                     )}
                   </strong>
                 </div>
@@ -2380,7 +2177,7 @@ export function Workspace({
           </footer>
         </main>
       </div>
-      {!dialog && !receipt && !mobile && (
+      {!dialog && !receipt && !checkout && !mobile && (
         <LubriAssistant
           scope={customer ? "customer" : "staff"}
           context={tab}
@@ -2390,12 +2187,26 @@ export function Workspace({
       )}
       {receipt && (
         <Receipt
-          sale={receipt}
+          sale={s.sales.find((v) => v.id === receipt.id) ?? receipt}
+          state={s}
+          vehicle={
+            s.vehicles.find((v) => v.id === receipt.vehicleId)?.plate ?? ""
+          }
           company={access.tenant.name}
           client={clientName(receipt.customerId)}
           onClose={() => setReceipt(null)}
         />
       )}{" "}
+      {checkout && (
+        <BillingDialog
+          key={JSON.stringify(checkout)}
+          target={checkout}
+          s={s}
+          manager={manager}
+          execute={execute}
+          onClose={() => setCheckout(null)}
+        />
+      )}
       {dialog && (
         <FormDialog
           key={dialog.title}

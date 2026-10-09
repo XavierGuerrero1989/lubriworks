@@ -1,3 +1,4 @@
+import { paymentLabel, orderBalance, salePaid } from "../../shared/billing";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -119,8 +120,7 @@ export function OrderDesk({
       (o) =>
         (branch === "all" || o.branchId === branch) &&
         (stageFilter === "all" || workStage(o) === stageFilter) &&
-        (paymentFilter === "all" ||
-          (paymentFilter === "paid") === (o.status === "paid")) &&
+        (paymentFilter === "all" || paymentFilter === paymentLabel(o)) &&
         normalize(
           `${vehicle(o.vehicleId)?.plate} ${client(o.customerId)} ${o.technician} ${o.serviceName}`,
         ).includes(normalize(query)),
@@ -416,6 +416,7 @@ export function OrderDesk({
         >
           <option value="all">Todos los cobros</option>
           <option value="unpaid">Sin cobrar</option>
+          <option value="partial">Cobro parcial</option>
           <option value="paid">Cobrados</option>
         </select>
       </div>
@@ -463,8 +464,25 @@ export function OrderDesk({
                 </div>
                 <div>
                   <Badge value={stage} />
-                  <Badge value={o.status === "paid" ? "paid" : "unpaid"} />
-                  <strong>{money(orderTotal(o))}</strong>
+                  <Badge value={paymentLabel(o)} />
+                  <strong>
+                    {money(
+                      s.sales.find((v) => v.orderId === o.id)?.total ??
+                        orderTotal(o),
+                    )}
+                  </strong>
+                  {s.sales.some((v) => v.orderId === o.id) && (
+                    <small>
+                      Cobrado{" "}
+                      {money(
+                        salePaid(
+                          s,
+                          s.sales.find((v) => v.orderId === o.id)!,
+                        ),
+                      )}{" "}
+                      · Saldo {money(orderBalance(s, o))}
+                    </small>
+                  )}
                 </div>
               </div>
               <div className="order-flow-actions">

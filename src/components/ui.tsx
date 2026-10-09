@@ -4,7 +4,8 @@ export const money = (v: number) =>
   new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(v);
 export const number = (v: number) =>
   new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(v);
@@ -30,6 +31,8 @@ export const labels: Record<string, string> = {
   pending: "Pendiente de autorización",
   delivered: "Entregado",
   unpaid: "Sin cobrar",
+  partial: "Cobro parcial",
+  mixed: "Pago combinado",
   legacy: "Orden anterior sin constancia de autorización",
   cancelled: "Cancelado",
   no_show: "Ausente",

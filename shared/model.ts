@@ -134,6 +134,12 @@ export const schemas = {
   }),
   services: z.object({
     name,
+    variant: z.string().trim().max(80).optional(),
+    category: z.string().trim().max(80).optional(),
+    description: z.string().trim().max(1000).optional(),
+    durationMinutes: z.number().int().min(5).max(720).optional(),
+    branchId: z.union([key, z.literal("")]).optional(),
+    active: z.boolean().optional(),
     labor: money,
     intervalKm: z.number().int().min(0).max(100000),
     intervalMonths: z.number().int().min(0).max(120),
@@ -239,6 +245,7 @@ export const schemas = {
         z.object({
           serviceId: key,
           name,
+          durationMinutes: z.number().int().min(5).max(720).optional(),
           labor: money,
           intervalKm: z.number().int().min(0).max(100000),
           intervalMonths: z.number().int().min(0).max(120),

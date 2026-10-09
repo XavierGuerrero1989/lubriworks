@@ -1,3 +1,4 @@
+import { serviceLabel, serviceAvailable } from "../../shared/services";
 import { OrderInventory } from "./OrderInventory";
 import { paymentLabel, orderBalance, salePaid } from "../../shared/billing";
 import { useEffect, useRef, useState } from "react";
@@ -191,7 +192,9 @@ export function OrderDesk({
         "Se crea una nueva revisión pendiente de autorización. Los valores se calculan con el catálogo actual.",
       fields: [
         field("serviceIds", "Servicios incluidos", "choices", {
-          options: s.services.map((v) => ({ value: v.id, label: v.name })),
+          options: s.services
+            .filter((v) => serviceAvailable(s, v, o!.branchId))
+            .map((v) => ({ value: v.id, label: serviceLabel(v) })),
           value: o!.serviceSnapshots?.map((v) => v.serviceId) || [o!.serviceId],
         }),
         field("extraItems", "Insumos adicionales del presupuesto", "lines", {

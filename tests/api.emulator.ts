@@ -2115,4 +2115,113 @@ describe("real API + Auth / Firestore emulators", () => {
         ?.plannedItems,
     ).toBeUndefined();
   });
+  it("persists service variants and protects existing quotes after catalog deactivation", async () => {
+    const { db } = admin();
+    const original = (await db.doc("tenants/alpha/vehicles/v1").get()).data()!;
+    await db
+      .doc("tenants/alpha/vehicles/catalog-v")
+      .set({ ...original, plate: "CAT123" });
+    await db
+      .doc("tenants/alpha/vehicles/catalog-v2")
+      .set({ ...original, plate: "CAT124" });
+    const sid = crypto.randomUUID(),
+      data = {
+        name: "Control general",
+        variant: "Premium",
+        category: "Controles",
+        description: "Revisión preventiva",
+        durationMinutes: 30,
+        branchId: "main",
+        active: true,
+        labor: 2000,
+        intervalKm: 5000,
+        intervalMonths: 6,
+        items: [],
+      };
+    const command = (
+      payload: Record<string, unknown>,
+      operation: string = crypto.randomUUID(),
+      token = ownerToken,
+      tenant = "alpha",
+    ) => call(token, "command", payload, tenant, operation);
+    expect(
+      (await command({ action: "save", collection: "services", data }, sid))
+        .status,
+    ).toBe(200);
+    const oid = crypto.randomUUID();
+    expect(
+      (
+        await command(
+          {
+            action: "order.create",
+            vehicleId: "catalog-v",
+            branchId: "main",
+            serviceIds: [sid],
+            odometer: original.odometer,
+          },
+          oid,
+        )
+      ).status,
+    ).toBe(200);
+    const before = (await db.doc(`tenants/alpha/orders/${oid}`).get()).data()!;
+    expect(before.serviceSnapshots[0]).toMatchObject({
+      name: "Control general · Premium",
+      durationMinutes: 30,
+      intervalKm: 5000,
+      intervalMonths: 6,
+      labor: 2000,
+    });
+    expect(
+      (
+        await command({
+          action: "save",
+          collection: "services",
+          id: sid,
+          data: { ...data, active: false, labor: 9000, intervalKm: 1000 },
+        })
+      ).status,
+    ).toBe(200);
+    expect((await db.doc(`tenants/alpha/orders/${oid}`).get()).data()).toEqual(
+      before,
+    );
+    const denied = await command({
+      action: "order.create",
+      vehicleId: "catalog-v2",
+      branchId: "main",
+      serviceIds: [sid],
+      odometer: original.odometer,
+    });
+    expect(denied.status).toBe(400);
+    expect(denied.data.error).toContain("inactivo");
+    expect(
+      (
+        await command({
+          action: "order.decision",
+          id: oid,
+          decision: "approved",
+          method: "presencial",
+          note: "Autoriza presupuesto original",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await command(
+          { action: "save", collection: "services", id: sid, data },
+          crypto.randomUUID(),
+          clientToken,
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await command(
+          { action: "save", collection: "services", id: sid, data },
+          crypto.randomUUID(),
+          otherToken,
+          "beta",
+        )
+      ).status,
+    ).toBe(400);
+  });
 });

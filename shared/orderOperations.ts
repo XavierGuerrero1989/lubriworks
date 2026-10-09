@@ -1,3 +1,4 @@
+import { serviceAvailable, serviceLabel } from "./services.js";
 import { z } from "zod";
 import { assertReservation } from "./inventory.js";
 import {
@@ -70,6 +71,10 @@ export function orderOperations(
     const ids = z.array(key).min(1).parse(cmd.serviceIds);
     need(new Set(ids).size === ids.length, "No repitas servicios.");
     const services = ids.map((sid) => get(s.services, sid, "Servicio"));
+    need(
+      services.every((v) => serviceAvailable(s, v, branchId)),
+      "Servicio inactivo o de otra sucursal.",
+    );
     const quantities = new Map<string, number>();
     [
       ...services.flatMap((v) => v.items),
@@ -107,7 +112,7 @@ export function orderOperations(
         .parse(cmd.extraItems ?? []),
       serviceId: ids[0],
       serviceName: services
-        .map((v) => v.name)
+        .map((v) => serviceLabel(v))
         .join(" + ")
         .slice(0, 120),
       labor,
@@ -122,7 +127,8 @@ export function orderOperations(
       intervalMonths: services[0].intervalMonths,
       serviceSnapshots: services.map((v) => ({
         serviceId: v.id,
-        name: v.name,
+        name: serviceLabel(v),
+        ...(v.durationMinutes ? { durationMinutes: v.durationMinutes } : {}),
         labor: v.labor,
         intervalKm: v.intervalKm,
         intervalMonths: v.intervalMonths,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validateService, serviceAvailable, serviceLabel } from "./services.js";
 import { purchaseOperations, validatePurchase } from "./purchases.js";
 import {
   availableStock,
@@ -317,14 +318,23 @@ export function execute(
           });
       }
     }
-    if (collection === "services")
-      for (const item of data.items) {
-        const p = find(s.products, item.productId, "Producto del combo");
-        requireThat(
-          p.unit !== "unidad" || Number.isInteger(item.quantity),
-          "Los productos por unidad requieren cantidades enteras.",
-        );
-      }
+    if (collection === "services") {
+      for (const field of [
+        "variant",
+        "category",
+        "description",
+        "durationMinutes",
+        "branchId",
+        "active",
+      ])
+        if (
+          existing &&
+          !Object.hasOwn(cmd.data as object, field) &&
+          (existing as any)[field] !== undefined
+        )
+          data[field] = (existing as any)[field];
+      validateService(s, { ...data, id: entityId });
+    }
     if (collection === "branches") {
       data.appointmentCapacity ??= (existing as any)?.appointmentCapacity ?? 1;
       const relevant = s.appointments.filter(
@@ -532,14 +542,18 @@ export function execute(
           data[field] = (existing as any)[field];
       } else {
         const service = find(s.services, data.serviceId, "Servicio");
-        data.serviceName = service.name;
+        requireThat(
+          serviceAvailable(s, service, data.branchId),
+          "Servicio inactivo o de otra sucursal.",
+        );
+        data.serviceName = serviceLabel(service);
         data.labor = service.labor;
         data.intervalKm = service.intervalKm;
         data.intervalMonths = service.intervalMonths;
         data.serviceSnapshots = [
           {
             serviceId: service.id,
-            name: service.name,
+            name: serviceLabel(service),
             labor: service.labor,
             intervalKm: service.intervalKm,
             intervalMonths: service.intervalMonths,

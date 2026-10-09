@@ -1,3 +1,5 @@
+import { ServiceDesk } from "./ServiceDesk";
+import { serviceLabel } from "../../shared/services";
 import { PurchaseDesk } from "./PurchaseDesk";
 import { StockDesk } from "./StockDesk";
 import { availableStock, reservedStock } from "../../shared/inventory";
@@ -232,7 +234,12 @@ export function Workspace({
           value: initial.branchId || defaultBranch,
         }),
         field("serviceIds", "Servicios incluidos", "choices", {
-          options: s.services.map((v) => ({ value: v.id, label: v.name })),
+          options: s.services
+            .filter((v) => v.active !== false)
+            .map((v) => ({
+              value: v.id,
+              label: `${serviceLabel(v)}${v.branchId ? " · " + branchName(v.branchId) : ""}`,
+            })),
           value: [],
           hint: "Elegí al menos un servicio; se sumarán mano de obra e insumos.",
         }),
@@ -457,6 +464,39 @@ export function Workspace({
     if (collection === "services")
       fields = [
         field("name", "Nombre del servicio"),
+        field("variant", "Variante", "text", {
+          required: false,
+          maxLength: 80,
+          hint: "Por ejemplo: sintético, semisintético o motor diésel.",
+        }),
+        field("category", "Categoría", "text", {
+          required: false,
+          maxLength: 80,
+        }),
+        field("branchId", "Sucursal del servicio", "text", {
+          required: false,
+          options: [
+            { value: "", label: "Todas (sólo servicios sin insumos)" },
+            ...opts("branches"),
+          ],
+          value: defaultBranch,
+        }),
+        field("description", "Descripción / alcance", "textarea", {
+          required: false,
+          maxLength: 1000,
+        }),
+        field("durationMinutes", "Duración estimada (minutos)", "number", {
+          required: false,
+          omitWhenEmpty: true,
+          min: 5,
+          max: 720,
+          step: "1",
+          hint: "Referencia para planificar turnos; no cambia su duración automáticamente.",
+        }),
+        field("active", "Disponible para nuevos presupuestos", "checkbox", {
+          required: false,
+          value: true,
+        }),
         field("labor", "Mano de obra", "number"),
         field("intervalKm", "Próximo servicio: kilómetros", "number", {
           step: "1",
@@ -1169,72 +1209,27 @@ export function Workspace({
     );
   else if (tab === "services")
     content = (
-      <>
-        <div className="page-heading">
-          <div>
-            <h1>Servicios y precios</h1>
-            <p>
-              Combos con mano de obra, insumos e intervalos de mantenimiento.
-            </p>
-          </div>
-          {manager && newButton("services", "Nuevo servicio")}
-        </div>
-        <div className="service-grid">
-          {s.services.map((v) => (
-            <article className="panel service-card" key={v.id}>
-              <i className="service-icon">
-                <Wrench />
-              </i>
-              <h2>{v.name}</h2>
-              <p>{v.items.length} insumos en el combo</p>
-              <ul>
-                {v.items.map((i, index) => (
-                  <li key={index}>
-                    {s.products.find((p) => p.id === i.productId)?.name ||
-                      i.productId}
-                    <strong>× {i.quantity}</strong>
-                  </li>
-                ))}
-              </ul>
-              <div className="service-total">
-                <small>Total actual</small>
-                <strong>
-                  {money(
-                    v.labor +
-                      v.items.reduce(
-                        (n, i) =>
-                          n +
-                          i.quantity *
-                            (s.products.find((p) => p.id === i.productId)
-                              ?.price || 0),
-                        0,
-                      ),
-                  )}
-                </strong>
-              </div>
-              <p className="muted">Mano de obra: {money(v.labor)}</p>
-              <div className="service-interval">
-                <RefreshCw size={15} />
-                {v.intervalKm ? `${number(v.intervalKm)} km` : ""}
-                {v.intervalKm && v.intervalMonths ? " o " : ""}
-                {v.intervalMonths ? `${v.intervalMonths} meses` : ""}
-                {!v.intervalKm && !v.intervalMonths
-                  ? "Sin recordatorio automático"
-                  : ""}
-              </div>
-              {manager && (
-                <button
-                  className="button secondary wide"
-                  onClick={() => edit("services", v)}
-                >
-                  Editar servicio
-                </button>
-              )}
-            </article>
-          ))}
-        </div>
-        {!s.services.length && <Empty text="Creá el primer servicio." />}
-      </>
+      <ServiceDesk
+        s={s}
+        branch={branch}
+        manager={manager}
+        onEdit={(v) => edit("services", v)}
+        onDuplicate={(v) =>
+          edit("services", undefined, {
+            ...v,
+            variant: "Nueva variante",
+            active: true,
+          })
+        }
+        onToggle={(v) =>
+          execute({
+            action: "save",
+            collection: "services",
+            id: v.id,
+            data: { ...v, active: v.active === false },
+          })
+        }
+      />
     );
   else if (tab === "purchases")
     content = (

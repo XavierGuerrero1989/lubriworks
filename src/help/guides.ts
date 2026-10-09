@@ -126,12 +126,13 @@ export const guides: HelpGuide[] = [
     keywords:
       "volver vuelve volvera retorno proximo mantenimiento cambio aceite filtro intervalo periodo meses fecha kilometros kilometrage service",
     steps: [
-      "Abrí Servicios y precios y creá o editá el servicio.",
-      "Cargá Próximo servicio: kilómetros y Próximo servicio: meses.",
+      "Abrí Servicios y precios y creá o editá el servicio. Crear variante copia sus insumos, mano de obra e intervalos a un registro independiente.",
+      "Indicá variante, categoría, alcance, sucursal y duración estimada. Los insumos deben pertenecer a esa sucursal; un servicio sin insumos puede estar disponible en todas.",
+      "Cargá Próximo servicio: kilómetros y Próximo servicio: meses. Cero desactiva ese criterio; ambos en cero dejan el servicio sin recordatorio automático.",
       "La orden guarda esos intervalos al crearla. Al finalizar el servicio, se genera el próximo mantenimiento.",
       "Se considera lo que ocurra primero: kilómetros o fecha. La anticipación del aviso se define en Notificaciones → Reglas automáticas.",
     ],
-    note: "Editar un servicio no cambia las órdenes que ya fueron creadas. El kilometraje calculado es una estimación: se confirma con el tablero.",
+    note: "Editar o desactivar el catálogo no cambia órdenes ni recordatorios existentes. Desactivar lo retira de presupuestos nuevos; en Inactivos podés volver a activarlo. El precio actual suma mano de obra y precios de insumos; la duración orienta la planificación y no reprograma turnos. El kilometraje calculado es una estimación: se confirma con el tablero.",
     destination: "services",
   },
   {

@@ -239,8 +239,17 @@ export function Workspace({
         }),
         field("odometer", "Kilometraje real", "number", { step: "1" }),
         field("readingDate", "Fecha de lectura", "date", { value: today() }),
+        field("hasExtinguisher", "¿Tiene matafuegos?", "text", {
+          options: [ { value: "yes", label: "Sí" }, { value: "no", label: "No" } ],
+          value: d.hasExtinguisher === true || d.extinguisherDue ? "yes" : d.hasExtinguisher === false ? "no" : "",
+        }),
         field("extinguisherDue", "Vencimiento del matafuegos", "date", {
+          showWhen: { key: "hasExtinguisher", value: "yes" },
+          hint: "Podés cargar una fecha pasada si está vencido.",
+        }),
+        field("wantsExtinguisher", "Quiere comprar un matafuegos nuevo", "checkbox", {
           required: false,
+          hint: "Queda registrado en la ficha para ofrecerle uno nuevo.",
         }),
       ];
     if (collection === "products")
@@ -369,7 +378,7 @@ export function Workspace({
       ];
     fields = fields.map((f) => ({
       ...f,
-      value: f.key === "checklist" ? f.value : (d[f.key] ?? f.value),
+      value: f.key === "checklist" || f.key === "hasExtinguisher" ? f.value : (d[f.key] ?? f.value),
     }));
     setDialog({
       title: `${record ? "Editar" : "Nuevo registro"} · ${{ branches: "Sucursal", customers: "Cliente", vehicles: "Vehículo", products: "Producto", suppliers: "Proveedor", services: "Servicio", appointments: "Turno", orders: "Orden de servicio", purchases: "Compra" }[collection]}`,
@@ -384,6 +393,8 @@ export function Workspace({
         delete data.password;
         if (collection === "vehicles") {
           delete data.firstRegistration;
+          data.hasExtinguisher = values.hasExtinguisher === "yes";
+          if (!data.hasExtinguisher) data.extinguisherDue = "";
           data.previousOdometer = d.previousOdometer ?? null;
           data.previousReadingDate = d.previousReadingDate || "";
         }
@@ -2320,6 +2331,12 @@ function VehicleCard({
       <div className="estimated">
         <RefreshCw size={14} /> Hoy, aproximadamente {number(estimatedKm(v))} km
       </div>
+      {(v.hasExtinguisher !== undefined || v.extinguisherDue || v.wantsExtinguisher) && (
+        <p>
+          {v.hasExtinguisher === false ? "Sin matafuegos" : v.extinguisherDue ? `Matafuegos: ${v.extinguisherDue < today() ? "vencido" : "vence"} el ${fmtDate(v.extinguisherDue)}` : "Matafuegos sin datos"}
+          {v.wantsExtinguisher && " · Quiere comprar uno nuevo"}
+        </p>
+      )}
       <div className="vehicle-actions">
         <button className="text-button" onClick={onReading}>
           Actualizar km

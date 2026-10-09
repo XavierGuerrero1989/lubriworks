@@ -275,6 +275,24 @@ describe("atomic operations and stock", () => {
     ).toThrow();
   });
 });
+describe("vehicle extinguisher", () => {
+  it("clears the date and reminder when there is no extinguisher, preserving purchase intent", () => {
+    const s = demoState();
+    const v = s.vehicles[0];
+    const result = execute(s, owner, cmd("save", { collection: "vehicles", id: v.id, data: { ...v, hasExtinguisher: false, wantsExtinguisher: true } }), "no-fire");
+    expect(result.vehicles[0].extinguisherDue).toBe("");
+    expect(result.vehicles[0].wantsExtinguisher).toBe(true);
+    expect(result.reminders.some((r) => r.id === `fire-${v.id}`)).toBe(false);
+  });
+  it("accepts expired extinguishers with replacement intent and requires a date when present", () => {
+    const s = demoState();
+    const v = s.vehicles[0];
+    const result = execute(s, owner, cmd("save", { collection: "vehicles", id: v.id, data: { ...v, hasExtinguisher: true, wantsExtinguisher: true, extinguisherDue: "2020-01-01" } }), "expired-fire");
+    expect(result.reminders.find((r) => r.id === `fire-${v.id}`)?.dueDate).toBe("2020-01-01");
+    expect(result.vehicles[0].wantsExtinguisher).toBe(true);
+    expect(() => execute(demoState(), owner, cmd("save", { collection: "vehicles", id: v.id, data: { ...v, hasExtinguisher: true, extinguisherDue: "" } }), "missing-fire-date")).toThrow();
+  });
+});
 describe("maintenance estimation", () => {
   it("saves a year-only vehicle and rejects invalid or inconsistent years", () => {
     const s = demoState();

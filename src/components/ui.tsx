@@ -121,6 +121,7 @@ export type Field = {
   minLength?: number;
   maxLength?: number;
   autoComplete?: string;
+  showWhen?: { key: string; value: string };
 };
 export type Dialog = {
   title: string;
@@ -137,7 +138,10 @@ export function FormDialog({
   onClose: () => void;
 }) {
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [fieldValues, setFieldValues] = useState<Record<string, string>>(() =>
+      Object.fromEntries(dialog.fields.map((f) => [f.key, String(f.value ?? "")]))
+    );
   return (
     <div
       className="modal-backdrop"
@@ -166,6 +170,11 @@ export function FormDialog({
           </button>
         </header>
         <form
+          onChange={(e) => {
+            const input = e.target;
+            if (!(input instanceof HTMLInputElement || input instanceof HTMLSelectElement || input instanceof HTMLTextAreaElement)) return;
+            if (input.name) setFieldValues((values) => ({ ...values, [input.name]: input.value }));
+          }}
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
@@ -192,7 +201,7 @@ export function FormDialog({
           }}
         >
           <div className="form-grid">
-            {dialog.fields.map((f, i) =>
+            {dialog.fields.filter((f) => !f.showWhen || fieldValues[f.showWhen.key] === f.showWhen.value).map((f, i) =>
               f.type === "lines" ? (
                 <div key={f.key} className="full">
                   <p className="field-label">{f.label}</p>

@@ -80,7 +80,12 @@ export const schemas = {
     readingDate: date,
     previousOdometer: km.nullable().default(null),
     previousReadingDate: optionalDate,
+    hasExtinguisher: z.boolean().optional(),
+    wantsExtinguisher: z.boolean().optional(),
     extinguisherDue: optionalDate,
+  }).refine((v) => v.hasExtinguisher !== true || !!v.extinguisherDue, {
+    message: "Indicá el vencimiento del matafuegos.",
+    path: ["extinguisherDue"],
   }).refine((v) => v.year !== undefined || !!v.firstRegistration, {
     message: "Indicá el año del vehículo.",
     path: ["year"],

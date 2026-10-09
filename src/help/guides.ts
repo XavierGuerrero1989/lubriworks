@@ -62,7 +62,7 @@ export const guides: HelpGuide[] = [
       "En Clientes y vehículos, tocá + Vehículo y elegí al cliente.",
       "Completá patente, marca, modelo y año del vehículo.",
       "Cargá la lectura real del tablero y la fecha de lectura.",
-      "Si corresponde, completá el vencimiento del matafuegos y guardá.",
+      "Indicá si tiene matafuegos. Si tiene, cargá su vencimiento, incluso si ya venció. Marcá si quiere comprar uno nuevo y guardá.",
     ],
     note: "La antigüedad y el kilometraje permiten estimar el uso inicial. Las próximas lecturas mejoran la estimación.",
     destination: "customers",

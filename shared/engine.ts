@@ -158,6 +158,7 @@ export function execute(
         data.previousOdometer = null;
         data.previousReadingDate = "";
       }
+      if (data.hasExtinguisher === false) data.extinguisherDue = "";
       const fireId = `fire-${entityId}`;
       s.reminders = s.reminders.filter((r) => r.id !== fireId);
       if (data.extinguisherDue)

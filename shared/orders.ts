@@ -64,5 +64,6 @@ export function orderEvent(
   note = "",
   actorName = "",
 ) {
+  o.publicUpdatedAt = at;
   (o.events ??= []).push({ id, title, by, at, note, actorName });
 }

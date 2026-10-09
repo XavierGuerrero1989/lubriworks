@@ -538,6 +538,8 @@ export function execute(
     if (collection === "orders") {
       for (const field of [
         "receivedAt",
+        "expectedReadyAt",
+        "publicUpdatedAt",
         "startedAt",
         "finishedAt",
         "deliveredAt",

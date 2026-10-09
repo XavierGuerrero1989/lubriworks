@@ -84,7 +84,7 @@ export function visitNotices(
       add(
         "quote-pending",
         o,
-        `${plate(o.vehicleId)}: el presupuesto está pendiente de tu decisión. Consultá el detalle de la visita en tu portal y comunicate con el lubricentro para autorizar o rechazar.`,
+        `${plate(o.vehicleId)}: el presupuesto está pendiente de tu decisión. Revisá el detalle y autorizá o rechazá desde Inicio / Mis vehículos en tu portal.`,
         { orderId: o.id, entityVersion: String(o.quoteRevision ?? 1) },
       );
     for (const a of o.additions ?? [])
@@ -92,7 +92,7 @@ export function visitNotices(
         add(
           "addition-pending",
           o,
-          `${plate(o.vehicleId)}: hay un trabajo adicional propuesto: ${a.title}. Consultá el detalle de la visita y comunicate con el lubricentro antes de autorizarlo.`,
+          `${plate(o.vehicleId)}: hay un trabajo adicional propuesto: ${a.title}. Revisá el detalle y autorizá o rechazá el adicional desde Inicio / Mis vehículos en tu portal.`,
           { orderId: o.id, additionId: a.id },
         );
     if (o.finishedAt && o.finishedAt !== old?.finishedAt)

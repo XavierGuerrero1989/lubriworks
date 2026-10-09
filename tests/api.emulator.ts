@@ -217,12 +217,10 @@ describe("real API + Auth / Firestore emulators", () => {
   });
   it("loads branch requirements for start and delivery in command transactions", async () => {
     const { db } = admin();
-    await db
-      .doc("tenants/alpha/branches/main")
-      .update({
-        receptionChecklist: ["Entrada"],
-        deliveryChecklist: ["Salida"],
-      });
+    await db.doc("tenants/alpha/branches/main").update({
+      receptionChecklist: ["Entrada"],
+      deliveryChecklist: ["Salida"],
+    });
     try {
       for (const action of ["startOrder", "deliverOrder"]) {
         const s = await db.runTransaction(
@@ -242,13 +240,11 @@ describe("real API + Auth / Firestore emulators", () => {
         ).toEqual(["Salida"]);
       }
     } finally {
-      await db
-        .doc("tenants/alpha/branches/main")
-        .set({
-          id: "main",
-          name: "Casa central",
-          address: "Av. San Martín 1450",
-        });
+      await db.doc("tenants/alpha/branches/main").set({
+        id: "main",
+        name: "Casa central",
+        address: "Av. San Martín 1450",
+      });
     }
   });
   it("cannot remove the last owner", async () => {
@@ -2453,5 +2449,124 @@ it("publishes transactional visit notices and attempts immediate push through th
     }))
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
+  }
+});
+
+it("authorizes a client's own reviewed quote once, rejects stale and foreign decisions, and isolates tenants", async () => {
+  const { db } = admin(),
+    seed = demoState(),
+    vehicleId = "portal-vehicle",
+    orderId = crypto.randomUUID();
+  try {
+    await db
+      .doc(`tenants/alpha/vehicles/${vehicleId}`)
+      .set({ ...seed.vehicles[0], id: vehicleId, plate: "PORTAL1" });
+    const created = await call(
+      ownerToken,
+      "command",
+      {
+        action: "order.create",
+        vehicleId,
+        branchId: "main",
+        serviceIds: ["s2"],
+        extraItems: [],
+        odometer: seed.vehicles[0].odometer,
+      },
+      "alpha",
+      orderId,
+    );
+    expect(created.status, JSON.stringify(created.data)).toBe(200);
+    const o = (await db.doc(`tenants/alpha/orders/${orderId}`).get()).data()!;
+    const payload = {
+      action: "order.decision",
+      id: orderId,
+      expectedRevision: o.quoteRevision,
+      expectedTotal: 30000,
+      decision: "approved",
+      method: "presencial",
+      note: "Autorizo desde mi cuenta",
+    };
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          { ...payload, expectedRevision: 99 },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          { ...payload, expectedTotal: 1 },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          { ...payload, id: "ot1002" },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (await call(clientToken, "command", payload, "beta", crypto.randomUUID()))
+        .status,
+    ).toBe(400);
+    const op = crypto.randomUUID(),
+      approved = await call(clientToken, "command", payload, "alpha", op);
+    expect(approved.status, JSON.stringify(approved.data)).toBe(200);
+    expect(
+      (await call(clientToken, "command", payload, "alpha", op)).data.replayed,
+    ).toBe(true);
+    const saved = (
+      await db.doc(`tenants/alpha/orders/${orderId}`).get()
+    ).data()!;
+    expect(saved.approvalHistory).toHaveLength(1);
+    expect(saved.approvalHistory[0]).toMatchObject({
+      by: "client",
+      method: "portal",
+      total: 30000,
+    });
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          payload,
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    // Release this test reservation without altering shared test fixtures.
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "order.cancel",
+            id: orderId,
+            reason: "Cierre de prueba local",
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+  } finally {
+    await db.doc(`tenants/alpha/vehicles/${vehicleId}`).delete();
+    await db.doc(`tenants/alpha/orders/${orderId}`).delete();
   }
 });

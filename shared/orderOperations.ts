@@ -42,7 +42,12 @@ export function orderOperations(
   now: string,
 ): boolean {
   if (!cmd.action.startsWith("order.")) return false;
-  need(member.role !== "customer", "Acción exclusiva del lubricentro.");
+  const portal = member.role === "customer";
+  need(
+    !portal ||
+      ["order.decision", "order.additionDecision"].includes(cmd.action),
+    "Acción exclusiva del lubricentro.",
+  );
   const lines = (input: unknown, branchId: string): OrderItem[] => {
     const rows = z
       .array(
@@ -206,6 +211,28 @@ export function orderOperations(
     return true;
   }
   const o = get(s.orders, cmd.id, "Orden");
+  if (portal) {
+    need(
+      !!member.customerId && o.customerId === member.customerId,
+      "Esta visita no pertenece a tu cuenta.",
+    );
+    need(
+      z.number().int().positive().parse(cmd.expectedRevision) ===
+        (o.quoteRevision ?? 1),
+      "El presupuesto cambió. Actualizá la pantalla y revisá el nuevo detalle.",
+    );
+  }
+  const reserve = () => {
+    try {
+      assertReservation(s, o);
+    } catch (error) {
+      if (portal)
+        throw new Error(
+          "No se pudieron reservar los insumos. Contactá al lubricentro para revisar la disponibilidad antes de autorizar.",
+        );
+      throw error;
+    }
+  };
   need(
     !["delivered", "cancelled"].includes(workStage(o)),
     "La orden está cerrada.",
@@ -240,18 +267,33 @@ export function orderOperations(
     );
   } else if (cmd.action === "order.decision") {
     need(
-      canCharge(member.role),
+      portal || canCharge(member.role),
       "Tu rol no permite registrar autorizaciones del cliente.",
     );
     need(
       o.approval !== "approved" && !o.startedAt && o.status === "received",
       "El presupuesto no está pendiente de decisión.",
     );
+    if (portal) {
+      need(o.approval === "pending", "El presupuesto ya tiene una decisión.");
+      need(
+        money.parse(cmd.expectedTotal) === quoteTotal(o),
+        "El importe cambió. Actualizá la pantalla antes de decidir.",
+      );
+    }
     const decision = z.enum(["approved", "rejected"]).parse(cmd.decision),
-      method = z.enum(["presencial", "telefono", "mensaje"]).parse(cmd.method),
-      note = short.parse(cmd.note);
+      method = portal
+        ? ("portal" as const)
+        : z.enum(["presencial", "telefono", "mensaje"]).parse(cmd.method),
+      note = portal
+        ? z
+            .string()
+            .max(1000)
+            .parse(cmd.note ?? "") ||
+          "Decisión registrada desde el portal del cliente."
+        : short.parse(cmd.note);
     o.approval = decision;
-    if (decision === "approved") assertReservation(s, o);
+    if (decision === "approved") reserve();
     (o.approvalHistory ??= []).push({
       revision: o.quoteRevision ?? 1,
       decision,
@@ -305,18 +347,39 @@ export function orderOperations(
   } else if (cmd.action === "order.additionDecision") {
     editable();
     need(
-      canCharge(member.role),
+      portal || canCharge(member.role),
       "Tu rol no permite registrar autorizaciones del cliente.",
     );
     const a = get(o.additions ?? [], cmd.additionId, "Adicional");
     need(a.status === "pending", "El adicional ya tiene una decisión.");
+    if (portal) {
+      need(
+        z.string().datetime().parse(cmd.expectedCreatedAt) === a.createdAt,
+        "El adicional cambió. Actualizá la pantalla.",
+      );
+      need(
+        money.parse(cmd.expectedTotal) ===
+          round(
+            a.labor + a.items.reduce((sum, i) => sum + i.quantity * i.price, 0),
+          ),
+        "El importe cambió. Actualizá la pantalla antes de decidir.",
+      );
+    }
     a.status = z.enum(["approved", "rejected"]).parse(cmd.decision);
-    a.method = z.enum(["presencial", "telefono", "mensaje"]).parse(cmd.method);
-    a.note = short.parse(cmd.note);
+    a.method = portal
+      ? "portal"
+      : z.enum(["presencial", "telefono", "mensaje"]).parse(cmd.method);
+    a.note = portal
+      ? z
+          .string()
+          .max(1000)
+          .parse(cmd.note ?? "") ||
+        "Decisión registrada desde el portal del cliente."
+      : short.parse(cmd.note);
     a.decidedAt = now;
     a.decidedBy = member.uid;
     if (a.status === "approved") {
-      assertReservation(s, o);
+      reserve();
       o.consumptionConfirmed = false;
     }
     orderEvent(
@@ -379,8 +442,14 @@ export function orderOperations(
         notes: z.string().max(1000),
         checklist: z.array(z.string().max(80)).max(20),
         recommendations: z.string().max(1000),
+        expectedReadyAt: z.string().datetime().nullable().optional(),
       })
       .parse(cmd.data);
+    if (data.expectedReadyAt && data.expectedReadyAt !== o.expectedReadyAt)
+      need(
+        Date.parse(data.expectedReadyAt) >= Date.parse(now),
+        "Indicá una estimación de retiro futura.",
+      );
     Object.assign(o, data);
     orderEvent(
       o,

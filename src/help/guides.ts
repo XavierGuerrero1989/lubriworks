@@ -280,6 +280,22 @@ export const guides: HelpGuide[] = [
     destination: "reports",
   },
   {
+    id: "client-home",
+    scope: "customer",
+    section: "vehicles",
+    title: "¿Cómo sigo mi visita y autorizo un trabajo?",
+    keywords:
+      "visita estado retiro presupuesto aprobar autorizar rechazar adicional inicio",
+    steps: [
+      "Abrí Inicio / Mis vehículos. Las visitas activas aparecen primero.",
+      "Revisá estado, último cambio y retiro estimado; el horario lo informa el lubricentro y puede cambiar.",
+      "Tocá Revisar presupuesto o Revisar adicional y leé los conceptos e importes.",
+      "Para autorizar, marcá que revisaste el detalle y tocá Autorizar trabajo. También podés rechazarlo.",
+      "Si el detalle cambió, actualizá la pantalla y revisalo nuevamente. El pago y la entrega se registran por separado.",
+    ],
+    destination: "vehicles",
+  },
+  {
     id: "client-vehicle",
     scope: "customer",
     section: "vehicles",

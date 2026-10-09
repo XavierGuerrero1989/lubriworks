@@ -1,3 +1,4 @@
+import { CustomerHome } from "./CustomerHome";
 import { AccessDesk } from "./AccessDesk";
 import { SettingsDesk } from "./SettingsDesk";
 import { ReportsDesk } from "./ReportsDesk";
@@ -116,7 +117,7 @@ const nav = [
   ["settings", "Configuración", Settings],
 ] as const;
 const clientNav = [
-  ["vehicles", "Mis vehículos", Car],
+  ["vehicles", "Inicio / Mis vehículos", Car],
   ["history", "Historial de servicios", ClipboardList],
   ["reminders", "Próximos mantenimientos", CalendarDays],
   ["notifications", "Notificaciones", Bell],
@@ -1315,55 +1316,19 @@ export function Workspace({
     );
   else if (tab === "vehicles")
     content = (
-      <>
-        <div className="welcome">
-          <div>
-            <span className="eyebrow">TU VEHÍCULO, BIEN ACOMPAÑADO</span>
-            <h1>Hola, {access.member.name.split(" ")[0]}.</h1>
-            <p>Tu historial y el próximo mantenimiento, siempre a mano.</p>
-          </div>
-          <button
-            className="button primary"
-            onClick={() => requestAppointment()}
-          >
-            <Plus size={17} />
-            Solicitar turno
-          </button>
-        </div>
-        <div className="vehicle-grid">
-          {s.vehicles.map((v) => (
-            <VehicleCard
-              key={v.id}
-              v={v}
-              onReading={() => readKm(v)}
-              onHistory={() => go("history")}
-              onAppointment={() => requestAppointment(v.id)}
-            />
-          ))}
-        </div>
-        <Section title="Tus próximos turnos">
-          <div className="bars">
-            {s.appointments
-              .filter((a) => a.date >= today() && a.status !== "cancelled")
-              .map((a) => (
-                <div className="payment-row" key={a.id}>
-                  <div>
-                    <strong>
-                      {fmtDate(a.date)} · {a.time}
-                    </strong>
-                    <small>
-                      {a.reason} · {branchName(a.branchId)}
-                    </small>
-                  </div>
-                  <Badge value={a.status} />
-                </div>
-              ))}
-            {!s.appointments.length && (
-              <Empty text="Todavía no tenés turnos." />
-            )}
-          </div>
-        </Section>
-      </>
+      <CustomerHome
+        state={s}
+        access={access}
+        run={execute}
+        onRefresh={onRefresh}
+        onReading={readKm}
+        onAppointment={requestAppointment}
+        onHistory={(v) => {
+          go("history");
+          setSearch(v.plate);
+        }}
+        onMaintenance={() => go("reminders")}
+      />
     );
   else if (tab === "reminders")
     content = (
@@ -1421,7 +1386,7 @@ export function Workspace({
     content = (
       <Notifications
         branch={branch}
-        onVisit={(order) => go(order ? "history" : "vehicles")}
+        onVisit={() => go("vehicles")}
         onOrder={(id) => {
           setFocusedOrder(id);
           setBranch("all");

@@ -85,3 +85,7 @@ Prompt del ícono: “Create the PWA app icon for this exact LubriWorks identity
 ## Compatibilidad del runtime de Vercel
 
 El backend usa importaciones relativas con extensión `.js` y una comprobación TypeScript con `NodeNext`. El build ejecuta `check:runtime` con `--no-experimental-require-module` para detectar dependencias que no arrancan en Vercel. Firebase Admin 14 usa `jwks-rsa` 4, que requiere `jose` sin importar dinámicamente su edición ESM. Se fija `jose` 5.10 dentro de `jwks-rsa` mediante un override acotado; la carga de Auth, Firestore y Web Push se verifica durante cada build. Seguimiento del problema: https://github.com/auth0/node-jwks-rsa/issues/507.
+
+## Inicio del portal del cliente
+
+`CustomerHome` prioriza órdenes propias activas, estima retiro sólo desde `expectedReadyAt` configurado por el lubricentro y distingue lecturas reales de kilometraje estimado. Las decisiones del cliente usan las operaciones transaccionales existentes, con titularidad comprobada antes de cargar inventario, revisión e importe esperado y fecha de creación del adicional. El servidor registra actor y método portal; reserva stock sin consumirlo hasta la finalización. No se incorporan colecciones ni permisos de escritura directa del cliente.

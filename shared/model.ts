@@ -269,6 +269,8 @@ export const schemas = {
     finishedAt: z.string().datetime().optional(),
     deliveredAt: z.string().datetime().optional(),
     deliveredBy: key.optional(),
+    expectedReadyAt: z.string().datetime().nullable().optional(),
+    publicUpdatedAt: z.string().datetime().optional(),
     approval: z.enum(["pending", "approved", "rejected"]).optional(),
     workStatus: z
       .enum([
@@ -288,7 +290,7 @@ export const schemas = {
           revision: z.number().int(),
           decision: z.enum(["approved", "rejected"]),
           total: money,
-          method: z.enum(["presencial", "telefono", "mensaje"]),
+          method: z.enum(["presencial", "telefono", "mensaje", "portal"]),
           note: text,
           at: z.string().datetime(),
           by: key,
@@ -318,7 +320,9 @@ export const schemas = {
           createdAt: z.string().datetime(),
           decidedAt: z.string().datetime().optional(),
           decidedBy: key.optional(),
-          method: z.enum(["presencial", "telefono", "mensaje"]).optional(),
+          method: z
+            .enum(["presencial", "telefono", "mensaje", "portal"])
+            .optional(),
           note: text.optional(),
         }),
       )

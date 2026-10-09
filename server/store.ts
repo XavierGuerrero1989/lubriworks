@@ -215,8 +215,18 @@ export async function loadCommandState(
     if (cmd.action === "deliverOrder" && order?.appointmentId)
       await doc("appointments", order.appointmentId);
   } else if (cmd.action.startsWith("order.")) {
+    if (
+      member.role === "customer" &&
+      !["order.decision", "order.additionDecision"].includes(cmd.action)
+    )
+      throw new Error("Acción exclusiva del lubricentro.");
     const o =
       cmd.action === "order.create" ? undefined : await doc("orders", cmd.id);
+    if (
+      member.role === "customer" &&
+      (!o || o.customerId !== member.customerId)
+    )
+      throw new Error("Esta visita no pertenece a tu cuenta.");
     if (cmd.action === "order.create") {
       await doc("vehicles", cmd.vehicleId);
       await doc("branches", cmd.branchId);

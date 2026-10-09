@@ -1,3 +1,4 @@
+import { readyInput, readyTimestamp } from "../../shared/clientHome";
 import { serviceLabel, serviceAvailable } from "../../shared/services";
 import { OrderInventory } from "./OrderInventory";
 import { paymentLabel, orderBalance, salePaid } from "../../shared/billing";
@@ -261,6 +262,16 @@ export function OrderDesk({
           value: o!.technician,
           required: false,
         }),
+        field(
+          "expectedReadyAt",
+          "Retiro estimado (fecha y hora)",
+          "datetime-local",
+          {
+            value: readyInput(o!.expectedReadyAt),
+            required: false,
+            hint: "Visible para el cliente. Hora de Argentina; dejá vacío para quitar la estimación.",
+          },
+        ),
         field("notes", "Notas internas", "textarea", {
           value: o!.notes,
           required: false,
@@ -303,6 +314,7 @@ export function OrderDesk({
           id: o!.id,
           data: {
             ...data,
+            expectedReadyAt: readyTimestamp(String(data.expectedReadyAt ?? "")),
             checklist: [
               ...new Set([
                 ...requiredControls().filter(

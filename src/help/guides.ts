@@ -35,6 +35,22 @@ export const guides: HelpGuide[] = [
     destination: "dashboard",
   },
   {
+    id: "staff-dashboard",
+    scope: "staff",
+    section: "dashboard",
+    title: "¿Cómo uso el tablero de Inicio?",
+    keywords:
+      "inicio tablero llegada recibir recepcion comenzar finalizar cobrar entregar entrega tiempos espera responsable sucursal",
+    steps: [
+      "Filtrá la sucursal y consultá Próximas llegadas. Recibir cliente abre la orden con los datos del turno; elegí el servicio y confirmá el kilometraje real.",
+      "Las tarjetas muestran el estado, responsable y tiempo registrado. Usá Comenzar, Finalizar y Cobrar según corresponda a tu rol.",
+      "Después del cobro, Entregar vehículo registra la entrega y completa el turno vinculado. El vehículo sale del tablero y conserva su historial.",
+      "Buscá por patente, cliente o responsable y tocá un contador para filtrar un estado.",
+    ],
+    note: "Los registros antiguos sin hora muestran Sin hora registrada. La gestión de presupuestos pendientes se incorporará en Órdenes de servicio.",
+    destination: "dashboard",
+  },
+  {
     id: "staff-customer",
     requires: ["settings"],
     scope: "staff",

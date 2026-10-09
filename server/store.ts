@@ -144,6 +144,7 @@ export async function loadCommandState(
     if (c === "orders") {
       const service = await doc("services", data.serviceId);
       await products(service?.items);
+      if (data.appointmentId) await doc("appointments", data.appointmentId);
     }
     if (c === "purchases") await doc("suppliers", data.supplierId);
   } else if (cmd.action === "finishOrder" || cmd.action === "chargeOrder") {
@@ -161,6 +162,10 @@ export async function loadCommandState(
         );
       } else await openCash(o.branchId);
     }
+  } else if (cmd.action === "startOrder" || cmd.action === "deliverOrder") {
+    const order = await doc("orders", cmd.id);
+    if (cmd.action === "deliverOrder" && order?.appointmentId)
+      await doc("appointments", order.appointmentId);
   } else if (cmd.action === "sale") {
     await doc("branches", cmd.branchId);
     await products(cmd.items as any[]);

@@ -212,6 +212,20 @@ export function execute(
           "Los productos por unidad requieren cantidades enteras.",
         );
       }
+    if (collection === "appointments") {
+      if (existing && (existing as any).orderId) {
+        data.orderId = (existing as any).orderId;
+        data.receivedAt = (existing as any).receivedAt;
+        requireThat(
+          data.vehicleId === (existing as any).vehicleId &&
+            data.branchId === (existing as any).branchId,
+          "El turno recibido conserva vehículo y sucursal.",
+        );
+      } else {
+        delete data.orderId;
+        delete data.receivedAt;
+      }
+    }
     if (collection === "appointments")
       requireThat(
         !s.appointments.some(
@@ -226,6 +240,42 @@ export function execute(
         "Ese horario ya está reservado en la sucursal.",
       );
     if (collection === "orders") {
+      for (const field of [
+        "receivedAt",
+        "startedAt",
+        "finishedAt",
+        "deliveredAt",
+        "deliveredBy",
+        "appointmentId",
+        "approval",
+      ]) {
+        if (existing && (existing as any)[field] !== undefined)
+          data[field] = (existing as any)[field];
+        else if (field !== "appointmentId") delete data[field];
+      }
+      if (!existing) data.receivedAt = now;
+      if (data.status === "working") data.startedAt ??= now;
+      if (data.appointmentId) {
+        const appointment = find(s.appointments, data.appointmentId, "Turno");
+        requireThat(
+          appointment.vehicleId === data.vehicleId &&
+            appointment.branchId === data.branchId &&
+            appointment.customerId === data.customerId,
+          "El turno no coincide con el vehículo, cliente o sucursal.",
+        );
+        requireThat(
+          !appointment.orderId || appointment.orderId === entityId,
+          "Este turno ya fue recibido.",
+        );
+        requireThat(
+          existing || ["requested", "confirmed"].includes(appointment.status),
+          "El turno no está disponible para recepción.",
+        );
+        appointment.orderId = entityId;
+        appointment.receivedAt ??= now;
+        if (appointment.status === "requested")
+          appointment.status = "confirmed";
+      }
       requireThat(
         !(existing as any)?.status ||
           !["ready", "paid"].includes((existing as any).status),
@@ -274,6 +324,34 @@ export function execute(
     const entity = { ...data, id: entityId };
     if (index < 0) rows.push(entity);
     else rows[index] = entity;
+  } else if (cmd.action === "startOrder") {
+    requireThat(
+      staff && role !== "cashier",
+      "Tu rol no permite comenzar servicios.",
+    );
+    const o = find(s.orders, cmd.id, "Orden");
+    requireThat(
+      o.status === "received" && !o.deliveredAt,
+      "La orden no está pendiente de comenzar.",
+    );
+    requireThat(
+      o.approval !== "pending" && o.approval !== "rejected",
+      "El presupuesto necesita aprobación antes de comenzar.",
+    );
+    o.status = "working";
+    o.startedAt = now;
+  } else if (cmd.action === "deliverOrder") {
+    requireThat(cashier, "Tu rol no permite entregar vehículos.");
+    const o = find(s.orders, cmd.id, "Orden");
+    requireThat(
+      o.status === "paid",
+      "Cobrá la orden antes de entregar el vehículo.",
+    );
+    requireThat(!o.deliveredAt, "El vehículo ya fue entregado.");
+    o.deliveredAt = now;
+    o.deliveredBy = member.uid;
+    if (o.appointmentId)
+      find(s.appointments, o.appointmentId, "Turno").status = "completed";
   } else if (cmd.action === "finishOrder") {
     requireThat(
       staff && role !== "cashier",
@@ -288,6 +366,7 @@ export function execute(
     reading(v, o.odometer, o.date);
     useStock(o.items, o.branchId, -1, `Servicio ${o.id}`);
     o.status = "ready";
+    o.finishedAt = now;
     for (const r of s.reminders)
       if (r.vehicleId === v.id && r.source === o.serviceId) r.status = "done";
     if (o.intervalKm || o.intervalMonths) {

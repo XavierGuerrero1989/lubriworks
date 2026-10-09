@@ -64,32 +64,35 @@ export const schemas = {
       })
       .optional(),
   }),
-  vehicles: z.object({
-    customerId: key,
-    plate: z
-      .string()
-      .trim()
-      .min(4)
-      .max(12)
-      .transform((v) => v.toUpperCase().replace(/\s/g, "")),
-    brand: name,
-    model: name,
-    year: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
-    firstRegistration: date.optional(),
-    odometer: km,
-    readingDate: date,
-    previousOdometer: km.nullable().default(null),
-    previousReadingDate: optionalDate,
-    hasExtinguisher: z.boolean().optional(),
-    wantsExtinguisher: z.boolean().optional(),
-    extinguisherDue: optionalDate,
-  }).refine((v) => v.hasExtinguisher !== true || !!v.extinguisherDue, {
-    message: "Indicá el vencimiento del matafuegos.",
-    path: ["extinguisherDue"],
-  }).refine((v) => v.year !== undefined || !!v.firstRegistration, {
-    message: "Indicá el año del vehículo.",
-    path: ["year"],
-  }),
+  vehicles: z
+    .object({
+      customerId: key,
+      plate: z
+        .string()
+        .trim()
+        .min(4)
+        .max(12)
+        .transform((v) => v.toUpperCase().replace(/\s/g, "")),
+      brand: name,
+      model: name,
+      year: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+      firstRegistration: date.optional(),
+      odometer: km,
+      readingDate: date,
+      previousOdometer: km.nullable().default(null),
+      previousReadingDate: optionalDate,
+      hasExtinguisher: z.boolean().optional(),
+      wantsExtinguisher: z.boolean().optional(),
+      extinguisherDue: optionalDate,
+    })
+    .refine((v) => v.hasExtinguisher !== true || !!v.extinguisherDue, {
+      message: "Indicá el vencimiento del matafuegos.",
+      path: ["extinguisherDue"],
+    })
+    .refine((v) => v.year !== undefined || !!v.firstRegistration, {
+      message: "Indicá el año del vehículo.",
+      path: ["year"],
+    }),
   products: z.object({
     name,
     sku: z.string().trim().min(1).max(60),
@@ -126,6 +129,8 @@ export const schemas = {
     reason: name,
     status: z.enum(["requested", "confirmed", "completed", "cancelled"]),
     technician: z.string().max(120).default(""),
+    orderId: key.optional(),
+    receivedAt: z.string().datetime().optional(),
   }),
   orders: z.object({
     customerId: key,
@@ -141,6 +146,13 @@ export const schemas = {
       .enum(["received", "working", "ready", "paid"])
       .default("received"),
     serviceName: z.string().max(120).default(""),
+    appointmentId: key.optional(),
+    receivedAt: z.string().datetime().optional(),
+    startedAt: z.string().datetime().optional(),
+    finishedAt: z.string().datetime().optional(),
+    deliveredAt: z.string().datetime().optional(),
+    deliveredBy: key.optional(),
+    approval: z.enum(["pending", "approved", "rejected"]).optional(),
     items: z
       .array(
         z.object({
@@ -362,7 +374,9 @@ export const today = () =>
   }).format(new Date());
 export const round = (n: number) =>
   Math.round((n + Number.EPSILON) * 100) / 100;
-export function vehicleYear(v: Pick<Vehicle, "year" | "firstRegistration">): number {
+export function vehicleYear(
+  v: Pick<Vehicle, "year" | "firstRegistration">,
+): number {
   return v.year ?? Number(v.firstRegistration?.slice(0, 4));
 }
 export function monthlyUsage(v: Vehicle): {

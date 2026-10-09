@@ -1,3 +1,4 @@
+import { OperationalDashboard } from "./OperationalDashboard";
 import { LubriAssistant } from "./LubriAssistant";
 import { auth } from "../lib/firebase";
 import {
@@ -199,8 +200,12 @@ export function Workspace({
     extra: Partial<Field> = {},
   ): Field => ({ key, label, type, ...extra });
   const defaultBranch = branch === "all" ? s.branches[0]?.id || "" : branch;
-  function edit(collection: Collection, record?: any) {
-    const d = record || {};
+  function edit(
+    collection: Collection,
+    record?: any,
+    initial: Record<string, any> = {},
+  ) {
+    const d = record || initial;
     let fields: Field[] = [];
     if (collection === "branches")
       fields = [
@@ -240,17 +245,30 @@ export function Workspace({
         field("odometer", "Kilometraje real", "number", { step: "1" }),
         field("readingDate", "Fecha de lectura", "date", { value: today() }),
         field("hasExtinguisher", "¿Tiene matafuegos?", "text", {
-          options: [ { value: "yes", label: "Sí" }, { value: "no", label: "No" } ],
-          value: d.hasExtinguisher === true || d.extinguisherDue ? "yes" : d.hasExtinguisher === false ? "no" : "",
+          options: [
+            { value: "yes", label: "Sí" },
+            { value: "no", label: "No" },
+          ],
+          value:
+            d.hasExtinguisher === true || d.extinguisherDue
+              ? "yes"
+              : d.hasExtinguisher === false
+                ? "no"
+                : "",
         }),
         field("extinguisherDue", "Vencimiento del matafuegos", "date", {
           showWhen: { key: "hasExtinguisher", value: "yes" },
           hint: "Podés cargar una fecha pasada si está vencido.",
         }),
-        field("wantsExtinguisher", "Quiere comprar un matafuegos nuevo", "checkbox", {
-          required: false,
-          hint: "Queda registrado en la ficha para ofrecerle uno nuevo.",
-        }),
+        field(
+          "wantsExtinguisher",
+          "Quiere comprar un matafuegos nuevo",
+          "checkbox",
+          {
+            required: false,
+            hint: "Queda registrado en la ficha para ofrecerle uno nuevo.",
+          },
+        ),
       ];
     if (collection === "products")
       fields = [
@@ -378,7 +396,10 @@ export function Workspace({
       ];
     fields = fields.map((f) => ({
       ...f,
-      value: f.key === "checklist" || f.key === "hasExtinguisher" ? f.value : (d[f.key] ?? f.value),
+      value:
+        f.key === "checklist" || f.key === "hasExtinguisher"
+          ? f.value
+          : (d[f.key] ?? f.value),
     }));
     setDialog({
       title: `${record ? "Editar" : "Nuevo registro"} · ${{ branches: "Sucursal", customers: "Cliente", vehicles: "Vehículo", products: "Producto", suppliers: "Proveedor", services: "Servicio", appointments: "Turno", orders: "Orden de servicio", purchases: "Compra" }[collection]}`,
@@ -635,7 +656,7 @@ export function Workspace({
               orders.filter((o) => ["received", "working"].includes(o.status))
                 .length
             }
-            detail={`${orders.filter((o) => o.status === "ready").length} listos para entregar`}
+            detail={`${orders.filter((o) => !o.deliveredAt && (o.status === "ready" || (o.status === "paid" && (o.receivedAt || o.finishedAt || o.date === today())))).length} listos o pendientes de entrega`}
             icon={<Car size={20} />}
           />
           <Stat
@@ -651,55 +672,54 @@ export function Workspace({
             icon={<Bell size={20} />}
           />
         </div>
-        <div className="dashboard-grid">
-          <Section
-            title="El taller, en movimiento"
-            subtitle="Seguí cada servicio de principio a fin"
-            action={
-              <LinkButton onClick={() => go("orders")}>Ver órdenes</LinkButton>
-            }
-          >
-            {orderTable(orders.filter((o) => o.status !== "paid").slice(0, 5))}
-          </Section>
-          <Section
-            title="Agenda de hoy"
-            subtitle={new Date().toLocaleDateString("es-AR", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })}
-            action={
-              <button
-                className="icon-button"
-                aria-label="Abrir agenda"
-                onClick={() => go("appointments")}
-              >
-                <ArrowUpRight size={18} />
-              </button>
-            }
-          >
-            {appointments.length ? (
-              <div className="agenda-list">
-                {appointments.slice(0, 4).map((a) => (
-                  <div className="agenda-item" key={a.id}>
-                    <time>{a.time}</time>
-                    <div>
-                      <strong>{vehicleName(a.vehicleId)}</strong>
-                      <span>{clientName(a.customerId)}</span>
-                      <small>{a.reason}</small>
-                    </div>
-                    <span className={`status-dot ${a.status}`} />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Empty text="Tu agenda está libre." />
-            )}
-            <button className="agenda-add" onClick={() => edit("appointments")}>
-              <Plus size={16} /> Agendar un turno
-            </button>
-          </Section>
-        </div>
+        <OperationalDashboard
+          state={s}
+          access={access}
+          branch={branch}
+          onReceive={(appointment) => {
+            const vehicle = s.vehicles.find(
+              (v) => v.id === appointment.vehicleId,
+            );
+            edit("orders", undefined, {
+              appointmentId: appointment.id,
+              vehicleId: appointment.vehicleId,
+              branchId: appointment.branchId,
+              technician: appointment.technician,
+              odometer: vehicle?.odometer,
+              notes: appointment.reason,
+            });
+          }}
+          onManageAppointment={(appointment) =>
+            edit("appointments", appointment)
+          }
+          onEdit={(order) => edit("orders", order)}
+          onStart={(id) =>
+            action(
+              "Comenzar atención",
+              { action: "startOrder", id },
+              "Se registrará la hora de inicio del trabajo.",
+            )
+          }
+          onFinish={(id) =>
+            action(
+              "Finalizar servicio",
+              { action: "finishOrder", id },
+              "Se descontarán los insumos y se calculará el próximo mantenimiento.",
+            )
+          }
+          onCharge={chargeOrder}
+          onDeliver={(id) =>
+            action(
+              "Entregar vehículo",
+              { action: "deliverOrder", id },
+              "La orden debe estar cobrada. Se registrará quién entrega y a qué hora; el turno vinculado quedará completado.",
+            )
+          }
+          onView={(order) => {
+            go("orders");
+            setSearch(plate(order.vehicleId));
+          }}
+        />
         <div className="dashboard-bottom">
           <Section
             title="Atención a estos productos"
@@ -2331,9 +2351,15 @@ function VehicleCard({
       <div className="estimated">
         <RefreshCw size={14} /> Hoy, aproximadamente {number(estimatedKm(v))} km
       </div>
-      {(v.hasExtinguisher !== undefined || v.extinguisherDue || v.wantsExtinguisher) && (
+      {(v.hasExtinguisher !== undefined ||
+        v.extinguisherDue ||
+        v.wantsExtinguisher) && (
         <p>
-          {v.hasExtinguisher === false ? "Sin matafuegos" : v.extinguisherDue ? `Matafuegos: ${v.extinguisherDue < today() ? "vencido" : "vence"} el ${fmtDate(v.extinguisherDue)}` : "Matafuegos sin datos"}
+          {v.hasExtinguisher === false
+            ? "Sin matafuegos"
+            : v.extinguisherDue
+              ? `Matafuegos: ${v.extinguisherDue < today() ? "vencido" : "vence"} el ${fmtDate(v.extinguisherDue)}`
+              : "Matafuegos sin datos"}
           {v.wantsExtinguisher && " · Quiere comprar uno nuevo"}
         </p>
       )}

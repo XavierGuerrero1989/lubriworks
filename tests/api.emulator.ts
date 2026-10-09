@@ -634,4 +634,161 @@ describe("real API + Auth / Firestore emulators", () => {
     expect(checkpoint?.reminderCursor).toBe("");
     expect(checkpoint?.reminderTenant).toBe("");
   }, 60000);
+  it("receives a turn atomically, starts work and delivers only after payment", async () => {
+    const { db } = admin();
+    const seed = demoState();
+    const vehicle = (await db.doc("tenants/alpha/vehicles/v1").get()).data()!;
+    const appointmentId = "dashboard-turn";
+    await db.doc("tenants/alpha/appointments/" + appointmentId).set({
+      ...seed.appointments[0],
+      id: appointmentId,
+      vehicleId: "v1",
+      customerId: "c1",
+      branchId: "main",
+      status: "confirmed",
+    });
+    const data = {
+      ...seed.orders[0],
+      status: "received",
+      vehicleId: "v1",
+      customerId: "c1",
+      branchId: "main",
+      odometer: vehicle.odometer,
+      appointmentId,
+    };
+    const operations = [crypto.randomUUID(), crypto.randomUUID()];
+    const receipts = await Promise.all(
+      operations.map((operation) =>
+        call(
+          ownerToken,
+          "command",
+          { action: "save", collection: "orders", data },
+          "alpha",
+          operation,
+        ),
+      ),
+    );
+    expect(receipts.map((r) => r.status).sort()).toEqual([200, 400]);
+    const id = operations[receipts.findIndex((r) => r.status === 200)];
+    expect(
+      (await db.doc("tenants/alpha/appointments/" + appointmentId).get()).data()
+        ?.orderId,
+    ).toBe(id);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { action: "startOrder", id },
+          "beta",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          { action: "startOrder", id },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { action: "startOrder", id },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await db.doc("tenants/alpha/orders/" + id).get()).data()?.startedAt,
+    ).toBeTruthy();
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { action: "deliverOrder", id },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { action: "finishOrder", id },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+    const cash = await db
+      .collection("tenants/alpha/cash")
+      .where("branchId", "==", "main")
+      .where("closedAt", "==", null)
+      .get();
+    if (cash.empty)
+      expect(
+        (
+          await call(
+            ownerToken,
+            "command",
+            { action: "openCash", branchId: "main", opening: 0 },
+            "alpha",
+            crypto.randomUUID(),
+          )
+        ).status,
+      ).toBe(200);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { action: "chargeOrder", id, method: "cash" },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+    const deliveryOperation = crypto.randomUUID();
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { action: "deliverOrder", id },
+          "alpha",
+          deliveryOperation,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { action: "deliverOrder", id },
+          "alpha",
+          deliveryOperation,
+        )
+      ).data.replayed,
+    ).toBe(true);
+    expect(
+      (await db.doc("tenants/alpha/appointments/" + appointmentId).get()).data()
+        ?.status,
+    ).toBe("completed");
+    expect(
+      (await db.doc("tenants/alpha/orders/" + id).get()).data()?.deliveredBy,
+    ).toBe("owner");
+  });
 });

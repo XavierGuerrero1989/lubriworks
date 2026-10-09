@@ -6,3 +6,4 @@ dist/
 *-debug.log
 .DS_Store
 coverage/
+output/pending-improvements-*.tar.gz

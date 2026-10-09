@@ -91,3 +91,13 @@ Se incorporó una mascota vectorial con forma de gota, sonrisa, parpadeo y movim
 Revisión visual en escritorio y móvil: búsqueda de próxima visita, navegación a Servicios y precios, guías del cliente, búsqueda de cambio de contraseña y cierre con Escape que devuelve el foco al botón. También se revisó la consola de plataforma con datos ficticios. La animación respeta `prefers-reduced-motion`; el asistente se oculta al abrir formularios, recibos o menú móvil y no se imprime.
 
 Pruebas de búsqueda y separación de guías por perfil y navegación permitida; compilación de frontend y servidor. Capturas de revisión local en la copia de trabajo: `lubri-assistant-desktop-preview.png` y `lubri-assistant-client-mobile-preview.png`.
+
+## Inicio: tablero operativo (9 de octubre de 2026)
+
+- Tablero por sucursal con llegadas del día y órdenes abiertas de días anteriores. Búsqueda por cliente, patente y responsable; filtro por estado.
+- Recepción desde turno con datos precargados y vínculo transaccional; dos recepciones concurrentes no duplican la orden.
+- Acciones comenzar, finalizar, cobrar y entregar con permisos en servidor. Entregar requiere cobro, registra actor/hora y completa el turno vinculado.
+- Horas de recepción, inicio y finalización calculadas por servidor. Los datos anteriores sin hora no muestran estimaciones inventadas. Los cobros antiguos sin datos de visita quedan en el historial.
+- Aprobación: columna preparada; la gestión del presupuesto sigue pendiente del punto 3. Portal del cliente sin cambios de interfaz.
+- El borrador previo de puntos 1–11 quedó separado en output/pending-improvements-2026-10-09.tar.gz del workspace local; no forma parte del despliegue.
+- Pruebas: tablero por fecha de Argentina, sucursales, estados, permisos, recepción única y entrega. Firebase emulado: concurrencia, aislamiento, persistencia y reintentos idempotentes.

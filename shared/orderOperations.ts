@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertReservation } from "./inventory.js";
 import {
   canCharge,
   canManage,
@@ -244,6 +245,7 @@ export function orderOperations(
       method = z.enum(["presencial", "telefono", "mensaje"]).parse(cmd.method),
       note = short.parse(cmd.note);
     o.approval = decision;
+    if (decision === "approved") assertReservation(s, o);
     (o.approvalHistory ??= []).push({
       revision: o.quoteRevision ?? 1,
       decision,
@@ -307,7 +309,10 @@ export function orderOperations(
     a.note = short.parse(cmd.note);
     a.decidedAt = now;
     a.decidedBy = member.uid;
-    if (a.status === "approved") o.consumptionConfirmed = false;
+    if (a.status === "approved") {
+      assertReservation(s, o);
+      o.consumptionConfirmed = false;
+    }
     orderEvent(
       o,
       id,

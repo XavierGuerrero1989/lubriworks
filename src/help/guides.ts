@@ -177,14 +177,15 @@ export const guides: HelpGuide[] = [
     section: "products",
     title: "¿Cómo cargo y controlo el stock?",
     keywords:
-      "stock inventario producto aceite cantidad insumos sku ajuste movimientos minimo",
+      "stock inventario fisico reservado disponible producto aceite insumos sku ubicacion compatibilidad ajuste movimientos minimo faltante reserva",
     steps: [
-      "En Productos y stock, agregá el producto con código, unidad y sucursal.",
-      "Definí precio, costo, stock inicial y mínimo de reposición.",
-      "Consultá Movimientos para ver entradas y salidas.",
-      "Usá Ajustar stock para corregir una diferencia y registrá su motivo.",
+      "Agregá el producto con código, unidad, sucursal, stock inicial y mínimo. Podés cargar ubicación y compatibilidades confirmadas según ficha técnica o catálogo.",
+      "Físico es la existencia registrada; reservado son insumos autorizados en órdenes abiertas; disponible es físico menos reservado. Las alertas se calculan sobre el disponible.",
+      "Autorizar un presupuesto o adicional reserva sus insumos si hay disponibilidad. Los adicionales pendientes no reservan. Una venta de mostrador no puede tomar insumos reservados para otras órdenes.",
+      "En Detalle / reservas consultá qué órdenes retienen stock y abrí su ficha. Cancelar libera la reserva. Finalizar descuenta sólo el consumo real y libera lo que no se utilizó; confirmar un consumo menor todavía no libera la reserva.",
+      "Administración puede consultar Movimientos o corregir el físico con motivo en Ajustar. Si la corrección deja menos físico que reservado, aparece el faltante; reponé o revisá el trabajo antes de continuar.",
     ],
-    note: "Los servicios finalizados y las ventas descuentan stock. Una compra recibida lo aumenta.",
+    note: "Las órdenes anteriores que ya estaban en atención protegen sus insumos sin inventar autorizaciones. Las compras recibidas aumentan el físico; una compra pendiente y un turno futuro todavía no reservan ni agregan existencias. La unidad no cambia mientras existan stock o reservas.",
     destination: "products",
   },
   {

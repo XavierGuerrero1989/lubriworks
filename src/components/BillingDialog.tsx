@@ -1,3 +1,4 @@
+import { availableStock } from "../../shared/inventory";
 import { useState } from "react";
 import { X, Plus } from "lucide-react";
 import { round, type State, type Sale } from "../../shared/model";
@@ -232,7 +233,8 @@ export function BillingDialog({
                           .filter((p) => p.branchId === branchId)
                           .map((p) => (
                             <option value={p.id} key={p.id}>
-                              {p.name} · {money(p.price)} · Stock {p.stock}
+                              {p.name} · {money(p.price)} · Disponible{" "}
+                              {availableStock(s, p)}
                             </option>
                           ))}
                       </select>

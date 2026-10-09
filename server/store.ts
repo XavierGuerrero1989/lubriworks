@@ -1,4 +1,8 @@
-import { consumedItems, billingItems } from "../shared/orders.js";
+import {
+  approvedItems,
+  consumedItems,
+  billingItems,
+} from "../shared/orders.js";
 import type { Firestore, Transaction, Query } from "firebase-admin/firestore";
 import {
   collections,
@@ -125,6 +129,14 @@ export async function loadCommandState(
         .where("closedAt", "==", null),
     );
   };
+  const activeOrders = async (branchId: string) => {
+    // Paginate only active work; the single-field index is already available.
+    for (const d of await readPages(
+      col("orders").where("status", "in", ["received", "working"]),
+      tx,
+    ))
+      if (d.data().branchId === branchId) add("orders", d);
+  };
   if (cmd.action === "save") {
     if (!Object.hasOwn(schemas, String(cmd.collection)))
       throw new Error("Módulo no permitido.");
@@ -150,7 +162,10 @@ export async function loadCommandState(
         col("orders").where("vehicleId", "==", cmd.id || operationId),
       );
     }
-    if (c === "products") await query(c, col(c).where("sku", "==", data.sku));
+    if (c === "products") {
+      await query(c, col(c).where("sku", "==", data.sku));
+      await activeOrders(data.branchId);
+    }
     if (c === "services" || c === "purchases") await products(data.items);
     if (c === "appointments")
       await query(c, col(c).where("date", "==", data.date));
@@ -171,6 +186,7 @@ export async function loadCommandState(
         cmd.action === "finishOrder" ? consumedItems(o) : billingItems(o),
       );
       if (cmd.action === "finishOrder") {
+        await activeOrders(o.branchId);
         await doc("vehicles", o.vehicleId);
         await doc("services", o.serviceId);
         await query(
@@ -191,6 +207,10 @@ export async function loadCommandState(
     }
   } else if (cmd.action === "startOrder" || cmd.action === "deliverOrder") {
     const order = await doc("orders", cmd.id);
+    if (cmd.action === "startOrder" && order) {
+      await products(approvedItems(order));
+      await activeOrders(order.branchId);
+    }
     if (cmd.action === "deliverOrder" && order?.appointmentId)
       await doc("appointments", order.appointmentId);
   } else if (cmd.action.startsWith("order.")) {
@@ -214,6 +234,14 @@ export async function loadCommandState(
     }
     if (cmd.action === "order.addition" || cmd.action === "order.consumption")
       await products(cmd.items as any[]);
+    if (
+      o &&
+      ["order.decision", "order.additionDecision"].includes(cmd.action)
+    ) {
+      await products(approvedItems(o));
+      await products((o.additions ?? []).flatMap((a: any) => a.items));
+      await activeOrders(o.branchId);
+    }
     if (cmd.action === "order.cancel" && o?.appointmentId)
       await doc("appointments", o.appointmentId);
   } else if (
@@ -237,6 +265,7 @@ export async function loadCommandState(
     if (cmd.customerId) await doc("customers", cmd.customerId);
     if (cmd.vehicleId) await doc("vehicles", cmd.vehicleId);
     await openCash(key.parse(cmd.branchId));
+    await activeOrders(key.parse(cmd.branchId));
   } else if (cmd.action === "receivePurchase") {
     const p = await doc("purchases", cmd.id);
     if (p) await products(p.items);

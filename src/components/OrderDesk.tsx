@@ -1,3 +1,4 @@
+import { OrderInventory } from "./OrderInventory";
 import { paymentLabel, orderBalance, salePaid } from "../../shared/billing";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -59,6 +60,7 @@ export function OrderDesk({
   run,
   onNew,
   onVehicle,
+  onInventory,
   onCharge,
   onReceipt,
   onRefresh,
@@ -71,6 +73,7 @@ export function OrderDesk({
   run: (c: Command) => Promise<void>;
   onNew: () => void;
   onVehicle: (id: string) => void;
+  onInventory: () => void;
   onCharge: (id: string) => void;
   onReceipt: (o: Order) => void;
   onRefresh: () => Promise<void>;
@@ -485,6 +488,7 @@ export function OrderDesk({
                   )}
                 </div>
               </div>
+              <OrderInventory s={s} o={o} onInventory={onInventory} />
               <div className="order-flow-actions">
                 <button
                   className="button"

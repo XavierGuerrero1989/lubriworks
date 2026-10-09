@@ -1,0 +1,99 @@
+.inventory-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+.inventory-summary > span {
+  background: #fff;
+  border: 1px solid #dce5e8;
+  border-radius: 14px;
+  padding: 18px;
+  color: #6d8087;
+  font-size: 13px;
+}
+.inventory-summary strong {
+  display: block;
+  font-size: 26px;
+  color: #12343b;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.inventory-explanation {
+  color: #6d8087;
+  line-height: 1.6;
+  padding: 12px 18px;
+  font-size: 13px;
+}
+.inventory-detail {
+  padding: 0 22px 22px;
+}
+.inventory-detail .inventory-summary {
+  margin-top: 0;
+}
+.inventory-detail dl {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 10px;
+  margin: 20px 0;
+}
+.inventory-detail dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.inventory-detail dt {
+  color: #6d8087;
+}
+.inventory-detail h3 {
+  margin: 22px 0 14px;
+}
+.inventory-detail p {
+  line-height: 1.6;
+}
+.inventory-detail .row-actions {
+  flex-wrap: wrap;
+}
+.inventory-reservations {
+  padding: 12px 18px;
+  border: 1px solid #dce5e8;
+  border-radius: 10px;
+  background: #f8fafb;
+  margin: 16px 0;
+}
+.inventory-reservations ul {
+  padding-left: 20px;
+  line-height: 1.8;
+}
+.inventory-reservations p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+@media (max-width: 650px) {
+  .inventory-summary {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .inventory-summary > span {
+    padding: 12px;
+  }
+  .inventory-summary strong {
+    font-size: 22px;
+  }
+  .inventory-detail {
+    padding: 0 14px 18px;
+  }
+  .inventory-detail dl {
+    grid-template-columns: 1fr;
+  }
+  .inventory-detail dd {
+    margin-bottom: 10px;
+  }
+}
+
+.inventory-shortage {
+  color: #b24c21;
+}
+.inventory-reservations .row-actions {
+  flex-wrap: wrap;
+}

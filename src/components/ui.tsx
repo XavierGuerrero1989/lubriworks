@@ -8,7 +8,7 @@ export const money = (v: number) =>
     maximumFractionDigits: 2,
   }).format(v);
 export const number = (v: number) =>
-  new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(v);
+  new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(v);
 export const fmtDate = (v: string) =>
   v
     ? new Date(v.slice(0, 10) + "T12:00:00").toLocaleDateString("es-AR", {

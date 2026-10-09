@@ -1,3 +1,4 @@
+import { availableStock, reservedStock } from "../shared/inventory";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { createServer, type Server } from "node:http";
 import { admin } from "../server/firebase";
@@ -556,7 +557,15 @@ describe("real API + Auth / Firestore emulators", () => {
         ),
       { readOnly: true },
     );
-    expect(scoped.orders).toHaveLength(1);
+    expect(scoped.orders.map((order) => order.id).sort()).toEqual([
+      "ot1001",
+      "ot1002",
+    ]);
+    expect(
+      scoped.orders.every((order) =>
+        ["received", "working"].includes(order.status),
+      ),
+    ).toBe(true);
     expect(scoped.sales).toHaveLength(0);
     expect(scoped.vehicles).toHaveLength(1);
     expect(
@@ -1685,5 +1694,219 @@ describe("real API + Auth / Firestore emulators", () => {
     expect(
       (await db.doc(`tenants/alpha/cash/${newCash}`).get()).data()?.expected,
     ).toBe(4000);
+  });
+  it("serializes inventory reservations against approvals, counter sales and actual consumption", async () => {
+    const { db } = admin(),
+      seed = demoState(),
+      command = (
+        payload: Record<string, unknown>,
+        operationId: string = crypto.randomUUID(),
+        token = ownerToken,
+        tenant = "alpha",
+      ) => call(token, "command", payload, tenant, operationId);
+    await db.doc("tenants/alpha/products/inv-oil").set({
+      ...seed.products[0],
+      id: "inv-oil",
+      sku: "INV-OIL",
+      stock: 5,
+      price: 1000,
+      cost: 500,
+      location: "Tanque de prueba",
+      compatibility: "Norma demo confirmada",
+    });
+    await db.doc("tenants/alpha/services/inv-service").set({
+      ...seed.services[0],
+      id: "inv-service",
+      items: [{ productId: "inv-oil", quantity: 4.5 }],
+    });
+    for (const id of ["inv-v1", "inv-v2"])
+      await db.doc(`tenants/alpha/vehicles/${id}`).set({
+        ...seed.vehicles[1],
+        id,
+        customerId: "c1",
+        plate: id.toUpperCase(),
+      });
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    for (let i = 0; i < 2; i++)
+      expect(
+        (
+          await command(
+            {
+              action: "order.create",
+              vehicleId: `inv-v${i + 1}`,
+              branchId: "main",
+              serviceIds: ["inv-service"],
+              odometer: 46200,
+            },
+            ids[i],
+          )
+        ).status,
+      ).toBe(200);
+    const approve = (id: string) => ({
+      action: "order.decision",
+      id,
+      decision: "approved",
+      method: "presencial",
+      note: "Cliente autoriza servicio de prueba",
+    });
+    const pair = await Promise.all(ids.map((id) => command(approve(id))));
+    expect(pair.map((r) => r.status).sort()).toEqual([200, 400]);
+    const winner = ids[pair.findIndex((r) => r.status === 200)],
+      loser = ids[pair.findIndex((r) => r.status === 400)];
+    expect(
+      (await db.doc("tenants/alpha/products/inv-oil").get()).data()?.stock,
+    ).toBe(5);
+    expect(
+      (await db.doc(`tenants/alpha/orders/${loser}`).get()).data()?.approval,
+    ).toBe("pending");
+    const snapshot = await call(ownerToken, "snapshot");
+    const local = snapshot.data.state,
+      prod = local.products.find((p: any) => p.id === "inv-oil");
+    expect(reservedStock(local, "inv-oil")).toBe(4.5);
+    expect(availableStock(local, prod)).toBe(0.5);
+    expect(
+      (await command(approve(loser), crypto.randomUUID(), clientToken)).status,
+    ).toBe(400);
+    const sale = {
+      action: "sale",
+      branchId: "main",
+      items: [{ productId: "inv-oil", quantity: 1 }],
+      method: "cash",
+    };
+    const cashId = crypto.randomUUID();
+    expect(
+      (
+        await command(
+          { action: "openCash", branchId: "main", opening: 0 },
+          cashId,
+        )
+      ).status,
+    ).toBe(200);
+    expect((await command(sale)).status).toBe(400);
+    expect(
+      (
+        await command({
+          ...sale,
+          items: [{ productId: "inv-oil", quantity: 0.5 }],
+        })
+      ).status,
+    ).toBe(200);
+    const additionId = crypto.randomUUID();
+    expect(
+      (
+        await command(
+          {
+            action: "order.addition",
+            id: winner,
+            title: "Más aceite",
+            items: [{ productId: "inv-oil", quantity: 0.5 }],
+          },
+          additionId,
+        )
+      ).status,
+    ).toBe(200);
+    const decideExtra = {
+      action: "order.additionDecision",
+      id: winner,
+      additionId,
+      decision: "approved",
+      method: "presencial",
+      note: "Cliente acepta adicional",
+    };
+    expect((await command(decideExtra)).status).toBe(400);
+    expect(
+      (
+        await command({
+          action: "order.additionDecision",
+          id: winner,
+          additionId,
+          decision: "rejected",
+          method: "presencial",
+          note: "No requiere adicional",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await command({ action: "startOrder", id: winner })).status).toBe(
+      200,
+    );
+    expect(
+      (
+        await command({
+          action: "order.consumption",
+          id: winner,
+          items: [{ productId: "inv-oil", quantity: 3.25 }],
+        })
+      ).status,
+    ).toBe(200);
+    const finishId = crypto.randomUUID(),
+      finished = await Promise.all([
+        command({ action: "finishOrder", id: winner }, finishId),
+        command({ action: "finishOrder", id: winner }, finishId),
+      ]);
+    expect(finished.map((r) => r.status)).toEqual([200, 200]);
+    expect(
+      (await db.doc("tenants/alpha/products/inv-oil").get()).data()?.stock,
+    ).toBe(1.25);
+    const after = await call(ownerToken, "snapshot");
+    expect(reservedStock(after.data.state, "inv-oil")).toBe(0);
+    expect(
+      (
+        await command({
+          action: "adjustStock",
+          id: "inv-oil",
+          quantity: 5,
+          reason: "Reposición de prueba",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await command(approve(loser))).status).toBe(200);
+    const cancelledId = crypto.randomUUID();
+    expect(
+      (
+        await command(
+          {
+            action: "order.cancel",
+            id: loser,
+            reason: "Cliente cancela turno",
+          },
+          cancelledId,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await command(
+          {
+            action: "order.cancel",
+            id: loser,
+            reason: "Cliente cancela turno",
+          },
+          cancelledId,
+        )
+      ).status,
+    ).toBe(200);
+    const released = await call(ownerToken, "snapshot");
+    expect(reservedStock(released.data.state, "inv-oil")).toBe(0);
+    expect(
+      (await db.doc("tenants/alpha/products/inv-oil").get()).data()?.stock,
+    ).toBe(6.25);
+    expect(
+      (
+        await command(
+          {
+            action: "adjustStock",
+            id: "inv-oil",
+            quantity: 1,
+            reason: "Prueba ajena",
+          },
+          crypto.randomUUID(),
+          otherToken,
+          "beta",
+        )
+      ).status,
+    ).toBe(400);
+    const client = await call(clientToken, "snapshot");
+    expect(client.data.state.products).toEqual([]);
+    expect(client.data.state.movements).toEqual([]);
   });
 });

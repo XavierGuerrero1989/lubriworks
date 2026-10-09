@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  availableStock,
+  assertReservation,
+  reservedStock,
+} from "./inventory.js";
 import { billingOperations, cashExpected } from "./billing.js";
 import {
   vehicleOperations,
@@ -26,6 +31,7 @@ import {
   today,
   vehicleYear,
   type Collection,
+  type Entity,
   type Member,
   type State,
   type Vehicle,
@@ -105,6 +111,15 @@ export function execute(
         sign > 0 || p.stock >= item.quantity,
         `Stock insuficiente: ${p.name}.`,
       );
+      if (sign < 0 && cmd.action !== "adjustStock")
+        requireThat(
+          availableStock(
+            s,
+            p,
+            cmd.action === "finishOrder" ? String(cmd.id) : "",
+          ) >= item.quantity,
+          `Stock disponible insuficiente: ${p.name}. Hay insumos reservados para otras órdenes.`,
+        );
       p.stock = round(p.stock + sign * item.quantity);
       s.movements.push({
         id: `${id}-${i}`,
@@ -113,6 +128,9 @@ export function execute(
         quantity: sign * item.quantity,
         reason,
         date: now,
+        by: member.uid,
+        actorName: member.name,
+        ...(cmd.action === "finishOrder" ? { orderId: String(cmd.id) } : {}),
       });
     }
   };
@@ -259,16 +277,40 @@ export function execute(
           data.branchId === (existing as any).branchId,
           "No se puede mover un producto entre sucursales.",
         );
-        data.stock = (existing as any).stock;
-      } else if (data.stock)
-        s.movements.push({
-          id,
-          productId: entityId,
-          branchId: data.branchId,
-          quantity: data.stock,
-          reason: "Stock inicial",
-          date: now,
-        });
+        const current = existing as Entity<"products">;
+        requireThat(
+          data.unit === current.unit ||
+            (current.stock === 0 && reservedStock(s, current.id) === 0),
+          "La unidad no se puede cambiar con stock o reservas existentes.",
+        );
+        for (const field of ["location", "compatibility"])
+          if (
+            !Object.hasOwn(cmd.data as object, field) &&
+            (existing as any)[field] !== undefined
+          )
+            data[field] = (existing as any)[field];
+        data.stock = current.stock;
+      } else {
+        requireThat(
+          data.unit !== "unidad" || Number.isInteger(data.stock),
+          "El stock inicial por unidad debe ser entero.",
+        );
+        requireThat(
+          Math.abs(data.stock * 100 - Math.round(data.stock * 100)) < 0.00001,
+          "El stock inicial admite hasta dos decimales.",
+        );
+        if (data.stock)
+          s.movements.push({
+            id,
+            productId: entityId,
+            branchId: data.branchId,
+            quantity: data.stock,
+            reason: "Stock inicial",
+            date: now,
+            by: member.uid,
+            actorName: member.name,
+          });
+      }
     }
     if (collection === "services")
       for (const item of data.items) {
@@ -554,6 +596,7 @@ export function execute(
     o.status = "working";
     o.startedAt = now;
     o.workStatus = "working";
+    assertReservation(s, o);
     orderEvent(o, id, "Trabajo iniciado", member.uid, now, "", member.name);
   } else if (cmd.action === "deliverOrder") {
     requireThat(cashier, "Tu rol no permite entregar vehículos.");

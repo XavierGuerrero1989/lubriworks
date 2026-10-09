@@ -1,3 +1,5 @@
+import { StockDesk } from "./StockDesk";
+import { availableStock, reservedStock } from "../../shared/inventory";
 import { BillingDialog, type Checkout } from "./BillingDialog";
 import { SalesDesk } from "./SalesDesk";
 import { collectedByMethod } from "../../shared/billing";
@@ -428,7 +430,19 @@ export function Workspace({
         }),
         field("price", "Precio de venta", "number"),
         field("cost", "Costo unitario", "number"),
-        field("minStock", "Stock mínimo", "number"),
+        field("minStock", "Stock mínimo disponible", "number", {
+          hint: "La alerta compara el mínimo con el físico menos las reservas.",
+        }),
+        field("location", "Ubicación", "text", {
+          required: false,
+          maxLength: 120,
+          hint: "Estante, depósito o tanque dentro de esta sucursal.",
+        }),
+        field("compatibility", "Compatibilidades confirmadas", "textarea", {
+          required: false,
+          maxLength: 1000,
+          hint: "Vehículos, motores o referencias compatibles, según documentación técnica.",
+        }),
         ...(!record
           ? [field("stock", "Stock inicial", "number", { value: 0 })]
           : []),
@@ -951,14 +965,16 @@ export function Workspace({
         <div className="dashboard-bottom">
           <Section
             title="Atención a estos productos"
-            subtitle="Stock por debajo del mínimo"
+            subtitle="Disponible en el mínimo o por debajo"
             action={
               <LinkButton onClick={() => go("products")}>Ver stock</LinkButton>
             }
           >
-            {scoped(s.products).filter((p) => p.stock <= p.minStock).length ? (
+            {scoped(s.products).filter(
+              (p) => availableStock(s, p) <= p.minStock,
+            ).length ? (
               scoped(s.products)
-                .filter((p) => p.stock <= p.minStock)
+                .filter((p) => availableStock(s, p) <= p.minStock)
                 .slice(0, 3)
                 .map((p) => (
                   <div className="stock-alert" key={p.id}>
@@ -972,13 +988,14 @@ export function Workspace({
                       </small>
                     </div>
                     <Badge value="warning">
-                      {number(p.stock)} {p.unit === "litro" ? "L" : "u."}
+                      {number(availableStock(s, p))}{" "}
+                      {p.unit === "litro" ? "L" : "u."}
                     </Badge>
                   </div>
                 ))
             ) : (
               <div className="all-good">
-                <CheckCircle2 /> El stock está por encima de los mínimos.
+                <CheckCircle2 /> El disponible está por encima de los mínimos.
               </div>
             )}
           </Section>
@@ -1040,6 +1057,7 @@ export function Workspace({
         focusId={focusedOrder}
         run={execute}
         onNew={() => newOrder()}
+        onInventory={() => go("products")}
         onVehicle={(id) => {
           setFocusedVehicle(id);
           go("customers");
@@ -1107,146 +1125,37 @@ export function Workspace({
     );
   else if (tab === "products")
     content = (
-      <>
-        <div className="page-heading">
-          <div>
-            <h1>Productos y stock</h1>
-            <p>Aceites a granel, filtros y repuestos por sucursal.</p>
-          </div>
-          {manager && newButton("products", "Nuevo producto")}
-        </div>
-        <div className="toolbar">
-          <SearchBox
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar producto o código…"
-          />
-          <button
-            className="button secondary"
-            onClick={() => setSubtab(subtab === "movements" ? "" : "movements")}
-          >
-            {subtab === "movements" ? "Ver productos" : "Movimientos"}
-          </button>
-        </div>
-        <Section
-          title={
-            subtab === "movements" ? "Movimientos de inventario" : "Inventario"
-          }
-        >
-          {subtab === "movements" ? (
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Producto</th>
-                    <th>Cantidad</th>
-                    <th>Motivo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scoped(s.movements)
-                    .slice()
-                    .reverse()
-                    .map((m) => (
-                      <tr key={m.id}>
-                        <td>{fmtDate(m.date)}</td>
-                        <td>
-                          {s.products.find((p) => p.id === m.productId)?.name}
-                        </td>
-                        <td>
-                          {m.quantity > 0 ? "+" : ""}
-                          {number(m.quantity)}
-                        </td>
-                        <td>{m.reason}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th>Sucursal</th>
-                    <th>Stock</th>
-                    <th>Mínimo</th>
-                    <th>Precio</th>
-                    {manager && <th>Costo</th>}
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {scoped(s.products)
-                    .filter((p) => match(p.name, p.sku))
-                    .map((p) => (
-                      <tr key={p.id}>
-                        <td>
-                          <strong>{p.name}</strong>
-                          <small>{p.sku}</small>
-                        </td>
-                        <td>{branchName(p.branchId)}</td>
-                        <td>
-                          <Badge
-                            value={p.stock <= p.minStock ? "warning" : "ok"}
-                          >
-                            {number(p.stock)} {p.unit === "litro" ? "L" : "u."}
-                          </Badge>
-                        </td>
-                        <td>{number(p.minStock)}</td>
-                        <td>{money(p.price)}</td>
-                        {manager && <td>{money(p.cost)}</td>}
-                        <td>
-                          {manager && (
-                            <div className="row-actions">
-                              <button
-                                className="text-button"
-                                onClick={() => edit("products", p)}
-                              >
-                                Editar
-                              </button>
-                              <button
-                                className="text-button"
-                                onClick={() =>
-                                  setDialog({
-                                    title: `Ajustar stock · ${p.name}`,
-                                    fields: [
-                                      field(
-                                        "quantity",
-                                        "Variación de stock",
-                                        "number",
-                                        {
-                                          min: -p.stock,
-                                          hint: "Positivo para agregar; negativo para descontar.",
-                                        },
-                                      ),
-                                      field("reason", "Motivo del ajuste"),
-                                    ],
-                                    submit: async (data) =>
-                                      execute({
-                                        action: "adjustStock",
-                                        id: p.id,
-                                        ...data,
-                                      }),
-                                  })
-                                }
-                              >
-                                Ajustar
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {!s.products.length && <Empty text="Cargá el primer producto." />}
-        </Section>
-      </>
+      <StockDesk
+        s={s}
+        branch={branch}
+        manager={manager}
+        onEdit={(p) => edit("products", p)}
+        onAdjust={(p) =>
+          setDialog({
+            title: `Ajustar stock · ${p.name}`,
+            description: `Físico ${p.stock}; reservado ${reservedStock(s, p.id)}. Registrá la diferencia real de inventario. Un ajuste puede revelar faltantes de las reservas, que quedarán señalados.`,
+            fields: [
+              field("quantity", "Variación de stock", "number", {
+                min: -p.stock,
+                step: p.unit === "unidad" ? "1" : "0.01",
+                hint: "Positivo para agregar; negativo para descontar.",
+              }),
+              field("reason", "Motivo del ajuste", "textarea", {
+                minLength: 5,
+                maxLength: 200,
+              }),
+            ],
+            submit: async (data) =>
+              execute({ action: "adjustStock", id: p.id, ...data }),
+          })
+        }
+        onOrder={(id) => {
+          setFocusedOrder(id);
+          setBranch("all");
+          go("orders");
+        }}
+        onPurchase={() => go("purchases")}
+      />
     );
   else if (tab === "services")
     content = (

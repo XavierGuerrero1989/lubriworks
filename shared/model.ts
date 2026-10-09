@@ -124,6 +124,8 @@ export const schemas = {
     minStock: z.number().min(0).max(1e6),
     branchId: key,
     stock: z.number().min(0).max(1e6),
+    location: z.string().trim().max(120).optional(),
+    compatibility: z.string().trim().max(1000).optional(),
   }),
   suppliers: z.object({
     name,
@@ -370,6 +372,9 @@ export type Movement = {
   quantity: number;
   reason: string;
   date: string;
+  by?: string;
+  actorName?: string;
+  orderId?: string;
 };
 export type Notice = {
   id: string;

@@ -42,6 +42,7 @@ import {
   dueInfo,
   estimatedKm,
   monthlyUsage,
+  vehicleYear,
   roleLabels,
   today,
   type Access,
@@ -229,8 +230,12 @@ export function Workspace({
         field("plate", "Patente"),
         field("brand", "Marca"),
         field("model", "Modelo / motor"),
-        field("firstRegistration", "Primera matriculación", "date", {
-          hint: "Usamos esta fecha para la estimación inicial de uso.",
+        field("year", "Año del vehículo", "number", {
+          min: 1900,
+          max: Number(today().slice(0, 4)),
+          step: "1",
+          value: record ? vehicleYear(record as Vehicle) : undefined,
+          hint: "Por ejemplo, 2020. Usamos el año para estimar el uso inicial.",
         }),
         field("odometer", "Kilometraje real", "number", { step: "1" }),
         field("readingDate", "Fecha de lectura", "date", { value: today() }),
@@ -378,6 +383,7 @@ export function Workspace({
         delete data.id;
         delete data.password;
         if (collection === "vehicles") {
+          delete data.firstRegistration;
           data.previousOdometer = d.previousOdometer ?? null;
           data.previousReadingDate = d.previousReadingDate || "";
         }

@@ -74,12 +74,16 @@ export const schemas = {
       .transform((v) => v.toUpperCase().replace(/\s/g, "")),
     brand: name,
     model: name,
-    firstRegistration: date,
+    year: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+    firstRegistration: date.optional(),
     odometer: km,
     readingDate: date,
     previousOdometer: km.nullable().default(null),
     previousReadingDate: optionalDate,
     extinguisherDue: optionalDate,
+  }).refine((v) => v.year !== undefined || !!v.firstRegistration, {
+    message: "Indicá el año del vehículo.",
+    path: ["year"],
   }),
   products: z.object({
     name,
@@ -353,6 +357,9 @@ export const today = () =>
   }).format(new Date());
 export const round = (n: number) =>
   Math.round((n + Number.EPSILON) * 100) / 100;
+export function vehicleYear(v: Pick<Vehicle, "year" | "firstRegistration">): number {
+  return v.year ?? Number(v.firstRegistration?.slice(0, 4));
+}
 export function monthlyUsage(v: Vehicle): {
   km: number;
   source: "visits" | "age";
@@ -366,9 +373,12 @@ export function monthlyUsage(v: Vehicle): {
         source: "visits",
       };
   }
-  const months = (end - Date.parse(v.firstRegistration)) / 864e5 / 30.4375;
+  // Year-only records use January 1 as an approximate starting point.
+  // Preserve estimates for legacy records until their year is edited.
+  const start = v.year !== undefined ? `${v.year}-01-01` : v.firstRegistration!;
+  const months = (end - Date.parse(start)) / 864e5 / 30.4375;
   return {
-    km: months > 0 ? Math.round(v.odometer / Math.max(months, 1)) : 0,
+    km: months >= 0 ? Math.round(v.odometer / Math.max(months, 1)) : 0,
     source: "age",
   };
 }

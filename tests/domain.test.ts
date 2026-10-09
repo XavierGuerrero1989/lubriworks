@@ -8,6 +8,7 @@ import {
   dueInfo,
   addMonths,
   today,
+  vehicleYear,
   type Member,
 } from "../shared/model";
 import { execute } from "../shared/engine";
@@ -275,6 +276,26 @@ describe("atomic operations and stock", () => {
   });
 });
 describe("maintenance estimation", () => {
+  it("saves a year-only vehicle and rejects invalid or inconsistent years", () => {
+    const s = demoState();
+    const data = { ...s.vehicles[0], year: 2020 };
+    const saved = execute(s, owner, cmd("save", { collection: "vehicles", id: data.id, data }), "year-save");
+    expect(saved.vehicles[0].year).toBe(2020);
+    expect(saved.vehicles[0].firstRegistration).toBeUndefined();
+    for (const year of [1899, 2020.5, Number(today().slice(0, 4)) + 1]) {
+      expect(() => execute(demoState(), owner, cmd("save", { collection: "vehicles", id: data.id, data: { ...data, year } }), "invalid-year")).toThrow();
+    }
+    expect(() => execute(demoState(), owner, cmd("save", { collection: "vehicles", id: data.id, data: { ...data, year: 2020, readingDate: "2019-12-31" } }), "before-year")).toThrow();
+  });
+  it("keeps legacy registration records readable and estimates from a year", () => {
+    const base = { ...demoState().vehicles[0], previousReadingDate: "", previousOdometer: null, odometer: 12000, readingDate: "2021-01-01" };
+    const { year: _year, ...legacyBase } = base;
+    const legacy = { ...legacyBase, firstRegistration: "2020-01-01" };
+    expect(vehicleYear(legacy)).toBe(2020);
+    expect(monthlyUsage({ ...base, year: 2020 })).toEqual(monthlyUsage(legacy));
+    expect(monthlyUsage({ ...base, year: 2021 })).toEqual({ km: 12000, source: "age" });
+    expect(() => execute(demoState(), owner, cmd("save", { collection: "vehicles", data: { ...legacy, plate: "LEG2020" } }), "legacy-year")).not.toThrow();
+  });
   it("starts with age / odometer then prefers actual readings", () => {
     const v = demoState().vehicles[0];
     expect(monthlyUsage(v).source).toBe("visits");

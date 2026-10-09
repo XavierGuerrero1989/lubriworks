@@ -44,7 +44,7 @@ Los roles se consultan en Firestore en cada operación; no se confía en un camp
 
 ## Cálculo de mantenimiento
 
-- Primera lectura: kilómetros totales / meses desde primera matriculación.
+- Primera lectura: kilómetros totales / meses aproximados desde el 1 de enero del año del vehículo, con un mínimo de un mes. El formulario pide sólo el año. Los registros anteriores con `firstRegistration` siguen siendo compatibles y conservan su estimación hasta editar el año.
 - Cuando existen lecturas separadas por al menos siete días: delta de kilómetros / tiempo transcurrido. Se conservan lecturas anteriores útiles cuando hay actualizaciones muy cercanas.
 - El odómetro estimado nunca reemplaza el real ni se escribe como una lectura.
 - El vencimiento se calcula por fecha, kilómetros o lo que ocurra primero. El matafuegos usa la fecha cargada por el lubricentro.

@@ -57,10 +57,10 @@ export const guides: HelpGuide[] = [
     section: "customers",
     title: "¿Cómo registro un vehículo?",
     keywords:
-      "vehiculo auto patente kilometros kilometraje matafuegos matriculacion antiguedad",
+      "vehiculo auto patente kilometros kilometraje matafuegos año antiguedad",
     steps: [
       "En Clientes y vehículos, tocá + Vehículo y elegí al cliente.",
-      "Completá patente, marca, modelo y primera matriculación.",
+      "Completá patente, marca, modelo y año del vehículo.",
       "Cargá la lectura real del tablero y la fecha de lectura.",
       "Si corresponde, completá el vencimiento del matafuegos y guardá.",
     ],

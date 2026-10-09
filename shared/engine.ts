@@ -7,6 +7,7 @@ import {
   round,
   schemas,
   today,
+  vehicleYear,
   type Collection,
   type Member,
   type State,
@@ -136,9 +137,9 @@ export function execute(
     }
     if (collection === "vehicles") {
       requireThat(
-        data.firstRegistration <= data.readingDate &&
+        vehicleYear(data) <= Number(data.readingDate.slice(0, 4)) &&
           data.readingDate <= today(),
-        "Revisá las fechas del vehículo.",
+        "Revisá el año del vehículo y la fecha de lectura.",
       );
       requireThat(
         !s.vehicles.some((v) => v.plate === data.plate && v.id !== entityId),

@@ -197,10 +197,14 @@ export const guides: HelpGuide[] = [
     steps: [
       "En Compras y proveedores, cargá primero el proveedor.",
       "Creá la compra, elegí sucursal y agregá productos, cantidades y costos.",
-      "Cuando llegue la mercadería, tocá Recibir.",
-      "La recepción suma los productos al stock de esa sucursal.",
+      "Completá entrega prevista, referencia y observaciones; una compra pendiente todavía no suma existencias.",
+      "Abrí Ver detalle → Recibir mercadería e ingresá sólo lo que llegó, el costo real y el remito. Las cantidades en cero quedan pendientes; cada entrega conserva fecha y responsable.",
+      "Repetí la recepción al llegar el saldo. Cancelar saldo pendiente conserva lo ya recibido y exige un motivo.",
+      "En Reposición elegí 7, 14 o 30 días. Prever insumos permite cargar productos y cantidades para cada turno: orienta compras, sin reservar ni descontar stock. Los turnos sin previsión quedan señalados.",
+      "Preparar compra copia las cantidades sugeridas para una sucursal; elegí el proveedor antes de guardar. La sugerencia considera mínimos, disponible, turnos previstos y entregas con fecha a tiempo. Una entrega prevista puede demorarse: verificá el ingreso real.",
+      "En Proveedores → Ver compras consultá el historial; el detalle de cada recepción conserva costos reales y el presupuesto original.",
     ],
-    note: "Una compra pendiente todavía no suma stock. Este registro no emite comprobantes fiscales.",
+    note: "Sin fecha de entrega o con entrega demorada, la compra no descuenta la sugerencia de reposición. La previsión funciona por día, sin asegurar entrega antes de la hora del turno. La recepción parcial no se edita: ante un error, corregí el inventario con motivo en Productos y stock. Este registro no paga al proveedor ni emite comprobantes fiscales.",
     destination: "purchases",
   },
   {

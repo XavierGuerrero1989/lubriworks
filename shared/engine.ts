@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { purchaseOperations, validatePurchase } from "./purchases.js";
 import {
   availableStock,
   assertReservation,
@@ -131,10 +132,14 @@ export function execute(
         by: member.uid,
         actorName: member.name,
         ...(cmd.action === "finishOrder" ? { orderId: String(cmd.id) } : {}),
+        ...(cmd.action === "receivePurchase"
+          ? { purchaseId: String(cmd.id), receiptId: id }
+          : {}),
       });
     }
   };
   if (
+    purchaseOperations(s, member, cmd, id, now, useStock) ||
     orderOperations(s, member, cmd, id, now) ||
     vehicleOperations(s, member, cmd, id, now) ||
     billingOperations(s, member, cmd, id, now, useStock)
@@ -350,6 +355,14 @@ export function execute(
       data.durationMinutes ??= old?.durationMinutes ?? 60;
       data.station ??= old?.station ?? 0;
       data.reschedules = old?.reschedules ?? [];
+      delete data.plannedItems;
+      delete data.planUpdatedAt;
+      delete data.planUpdatedBy;
+      if (old?.plannedItems && old.branchId === data.branchId) {
+        data.plannedItems = old.plannedItems;
+        if (old.planUpdatedAt) data.planUpdatedAt = old.planUpdatedAt;
+        if (old.planUpdatedBy) data.planUpdatedBy = old.planUpdatedBy;
+      }
       if (old?.orderId) {
         data.orderId = old.orderId;
         data.receivedAt = old.receivedAt;
@@ -564,13 +577,16 @@ export function execute(
     if (collection === "purchases") {
       find(s.suppliers, data.supplierId, "Proveedor");
       requireThat(
-        data.status === "draft" && (existing as any)?.status !== "received",
-        "La compra recibida es inmutable.",
+        data.status === "draft" &&
+          (!existing || (existing as any).status === "draft") &&
+          !(existing as any)?.receipts?.length,
+        "Sólo se puede editar una compra sin recepciones ni cancelación.",
       );
-      for (const i of data.items) {
-        const p = find(s.products, i.productId);
-        requireThat(p.branchId === data.branchId, "Producto de otra sucursal.");
-      }
+      delete data.receipts;
+      delete data.cancelledAt;
+      delete data.cancelledBy;
+      delete data.cancelReason;
+      validatePurchase(s, data);
     }
     const rows = s[collection] as any[];
     const index = rows.findIndex((r) => r.id === entityId);
@@ -686,14 +702,6 @@ export function execute(
           source: snapshot.serviceId,
         });
       }
-  } else if (cmd.action === "receivePurchase") {
-    requireThat(manager, "Sólo administración puede recibir compras.");
-    const p = find(s.purchases, cmd.id, "Compra");
-    requireThat(p.status === "draft", "La compra ya fue recibida.");
-    useStock(p.items, p.branchId, 1, `Compra ${p.id}`);
-    for (const line of p.items)
-      find(s.products, line.productId).cost = line.cost;
-    p.status = "received";
   } else if (cmd.action === "adjustStock") {
     requireThat(manager, "Sólo administración puede ajustar stock.");
     const p = find(s.products, cmd.id);
@@ -774,6 +782,9 @@ export function execute(
     data.technician = "";
     delete data.orderId;
     delete data.receivedAt;
+    delete data.plannedItems;
+    delete data.planUpdatedAt;
+    delete data.planUpdatedBy;
     delete data.reschedules;
     delete data.rescheduleReason;
     delete data.statusReason;

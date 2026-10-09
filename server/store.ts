@@ -266,7 +266,13 @@ export async function loadCommandState(
     if (cmd.vehicleId) await doc("vehicles", cmd.vehicleId);
     await openCash(key.parse(cmd.branchId));
     await activeOrders(key.parse(cmd.branchId));
-  } else if (cmd.action === "receivePurchase") {
+  } else if (cmd.action === "purchase.plan") {
+    await doc("appointments", cmd.id);
+    await products(cmd.items as any[]);
+  } else if (
+    cmd.action === "receivePurchase" ||
+    cmd.action === "purchase.cancel"
+  ) {
     const p = await doc("purchases", cmd.id);
     if (p) await products(p.items);
   } else if (cmd.action === "adjustStock") await doc("products", cmd.id);

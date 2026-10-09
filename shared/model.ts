@@ -180,6 +180,13 @@ export const schemas = {
     technician: z.string().max(120).default(""),
     orderId: key.optional(),
     receivedAt: z.string().datetime().optional(),
+    plannedItems: z
+      .array(
+        z.object({ productId: key, quantity: z.number().positive().max(1e6) }),
+      )
+      .optional(),
+    planUpdatedAt: z.string().datetime().optional(),
+    planUpdatedBy: key.optional(),
   }),
   orders: z.object({
     customerId: key,
@@ -297,7 +304,34 @@ export const schemas = {
       )
       .min(1)
       .max(50),
-    status: z.enum(["draft", "received"]).default("draft"),
+    status: z
+      .enum(["draft", "partial", "received", "cancelled"])
+      .default("draft"),
+    expectedDate: z.union([date, z.literal("")]).optional(),
+    reference: z.string().trim().max(200).optional(),
+    notes: z.string().trim().max(1000).optional(),
+    receipts: z
+      .array(
+        z.object({
+          id: key,
+          at: z.string().datetime(),
+          by: key,
+          actorName: z.string().max(120),
+          reference: z.string().max(200),
+          note: z.string().max(1000),
+          items: z.array(
+            z.object({
+              productId: key,
+              quantity: z.number().positive(),
+              cost: money,
+            }),
+          ),
+        }),
+      )
+      .optional(),
+    cancelledAt: z.string().datetime().optional(),
+    cancelledBy: key.optional(),
+    cancelReason: z.string().max(1000).optional(),
   }),
 };
 export type Collection = keyof typeof schemas;
@@ -375,6 +409,8 @@ export type Movement = {
   by?: string;
   actorName?: string;
   orderId?: string;
+  purchaseId?: string;
+  receiptId?: string;
 };
 export type Notice = {
   id: string;
@@ -535,6 +571,15 @@ export function projectState(state: State, member: Member): State {
   }
   if (member.role === "customer") {
     out.vehicles = out.vehicles.map((v) => ({ ...v, technicalNotes: "" }));
+    out.appointments = out.appointments.map((a) => {
+      const {
+        plannedItems,
+        planUpdatedAt,
+        planUpdatedBy,
+        ...publicAppointment
+      } = a;
+      return publicAppointment;
+    });
     out.customers = out.customers.map((c) => ({ ...c, notes: "" }));
     out.orders = out.orders.map((o) => ({
       ...o,

@@ -1909,4 +1909,210 @@ describe("real API + Auth / Firestore emulators", () => {
     expect(client.data.state.products).toEqual([]);
     expect(client.data.state.movements).toEqual([]);
   });
+  it("receives purchases partially, prevents concurrent overdelivery and preserves cancelled balances", async () => {
+    const { db } = admin();
+    const product = db.doc("tenants/alpha/products/proc-filter");
+    await product.set({
+      name: "Filtro recepción",
+      sku: "PROC-FILTER",
+      unit: "unidad",
+      price: 300,
+      cost: 100,
+      stock: 0,
+      minStock: 2,
+      branchId: "main",
+    });
+    const command = (
+      payload: Record<string, unknown>,
+      operationId = crypto.randomUUID(),
+      token = ownerToken,
+      tenant = "alpha",
+    ) => call(token, "command", payload, tenant, operationId);
+    const buy = crypto.randomUUID();
+    const created = await command(
+      {
+        action: "save",
+        collection: "purchases",
+        data: {
+          supplierId: "sup1",
+          branchId: "main",
+          date: today(),
+          expectedDate: today(),
+          reference: "Pedido 7",
+          notes: "Entrega en dos tandas",
+          items: [{ productId: "proc-filter", quantity: 5, cost: 100 }],
+        },
+      },
+      buy,
+    );
+    expect(created.status, JSON.stringify(created.data)).toBe(200);
+    const receipt = {
+      action: "receivePurchase",
+      id: buy,
+      items: [{ productId: "proc-filter", quantity: 3, cost: 110 }],
+      reference: "Remito A",
+      note: "Primera entrega",
+    };
+    const concurrent = await Promise.all([command(receipt), command(receipt)]);
+    expect(concurrent.map((r) => r.status).sort()).toEqual([200, 400]);
+    let purchase = (
+      await db.doc(`tenants/alpha/purchases/${buy}`).get()
+    ).data()!;
+    expect(purchase.status).toBe("partial");
+    expect(purchase.receipts).toHaveLength(1);
+    expect((await product.get()).data()?.stock).toBe(3);
+    expect(
+      (await command(receipt, crypto.randomUUID(), clientToken)).status,
+    ).toBe(400);
+    expect(
+      (await command(receipt, crypto.randomUUID(), otherToken, "beta")).status,
+    ).toBe(400);
+    const id = crypto.randomUUID(),
+      last = {
+        action: "receivePurchase",
+        id: buy,
+        items: [{ productId: "proc-filter", quantity: 2, cost: 125 }],
+        reference: "Remito B",
+      };
+    const retries = await Promise.all([command(last, id), command(last, id)]);
+    expect(retries.map((r) => r.status)).toEqual([200, 200]);
+    expect(retries.some((r) => r.data.replayed)).toBe(true);
+    purchase = (await db.doc(`tenants/alpha/purchases/${buy}`).get()).data()!;
+    expect(purchase.status).toBe("received");
+    expect(purchase.receipts).toHaveLength(2);
+    expect(purchase.items[0].cost).toBe(100);
+    expect((await product.get()).data()).toMatchObject({ stock: 5, cost: 125 });
+    expect((await command(last)).status).toBe(400);
+    const second = crypto.randomUUID();
+    expect(
+      (
+        await command(
+          {
+            action: "save",
+            collection: "purchases",
+            data: {
+              supplierId: "sup1",
+              branchId: "main",
+              date: today(),
+              items: [{ productId: "proc-filter", quantity: 4, cost: 130 }],
+            },
+          },
+          second,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await command({
+          action: "receivePurchase",
+          id: second,
+          items: [{ productId: "proc-filter", quantity: 1, cost: 130 }],
+        })
+      ).status,
+    ).toBe(200);
+    const cancelId = crypto.randomUUID(),
+      cancel = {
+        action: "purchase.cancel",
+        id: second,
+        reason: "Proveedor cancela el saldo",
+      };
+    expect((await command(cancel, cancelId)).status).toBe(200);
+    expect((await command(cancel, cancelId)).data.replayed).toBe(true);
+    expect((await product.get()).data()?.stock).toBe(6);
+    expect(
+      (await db.doc(`tenants/alpha/purchases/${second}`).get()).data(),
+    ).toMatchObject({
+      status: "cancelled",
+      cancelReason: "Proveedor cancela el saldo",
+    });
+    expect(
+      (await command({ action: "receivePurchase", id: second })).status,
+    ).toBe(400);
+    const movements = await db
+      .collection("tenants/alpha/movements")
+      .where("productId", "==", "proc-filter")
+      .get();
+    expect(movements.size).toBe(3);
+    expect(
+      movements.docs.every(
+        (d) =>
+          d.data().purchaseId && d.data().receiptId && d.data().by === "owner",
+      ),
+    ).toBe(true);
+    const client = await call(clientToken, "snapshot");
+    expect(client.data.state.purchases).toEqual([]);
+  });
+  it("persists staff-only appointment input forecasts with tenant isolation and rejects forged customer plans", async () => {
+    const { db } = admin();
+    const id = "proc-turn";
+    await db.doc(`tenants/alpha/appointments/${id}`).set({
+      customerId: "c1",
+      vehicleId: "v1",
+      branchId: "main",
+      date: today(),
+      time: "23:00",
+      reason: "Prueba de previsión",
+      status: "confirmed",
+      technician: "",
+    });
+    const plan = {
+      action: "purchase.plan",
+      id,
+      items: [{ productId: "proc-filter", quantity: 2 }],
+    };
+    const operation = crypto.randomUUID();
+    expect(
+      (await call(ownerToken, "command", plan, "alpha", operation)).status,
+    ).toBe(200);
+    expect(
+      (await call(ownerToken, "command", plan, "alpha", operation)).data
+        .replayed,
+    ).toBe(true);
+    expect(
+      (await db.doc(`tenants/alpha/appointments/${id}`).get()).data(),
+    ).toMatchObject({ plannedItems: plan.items, planUpdatedBy: "owner" });
+    expect(
+      (await db.doc("tenants/alpha/products/proc-filter").get()).data()?.stock,
+    ).toBe(6);
+    expect(
+      (await call(clientToken, "command", plan, "alpha", crypto.randomUUID()))
+        .status,
+    ).toBe(400);
+    expect(
+      (await call(otherToken, "command", plan, "beta", crypto.randomUUID()))
+        .status,
+    ).toBe(400);
+    const customer = await call(clientToken, "snapshot");
+    expect(
+      customer.data.state.appointments.find((a: any) => a.id === id)
+        .plannedItems,
+    ).toBeUndefined();
+    const future = new Date(today() + "T12:00:00Z");
+    future.setUTCDate(future.getUTCDate() + 30);
+    const requestId = crypto.randomUUID();
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          {
+            action: "requestAppointment",
+            vehicleId: "v1",
+            branchId: "main",
+            date: future.toISOString().slice(0, 10),
+            time: "12:00",
+            reason: "Cambio de aceite",
+            plannedItems: [{ productId: "proc-filter", quantity: 99 }],
+            planUpdatedBy: "owner",
+          },
+          "alpha",
+          requestId,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await db.doc(`tenants/alpha/appointments/${requestId}`).get()).data()
+        ?.plannedItems,
+    ).toBeUndefined();
+  });
 });

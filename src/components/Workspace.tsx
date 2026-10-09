@@ -1,3 +1,4 @@
+import { PurchaseDesk } from "./PurchaseDesk";
 import { StockDesk } from "./StockDesk";
 import { availableStock, reservedStock } from "../../shared/inventory";
 import { BillingDialog, type Checkout } from "./BillingDialog";
@@ -576,6 +577,15 @@ export function Workspace({
           value: defaultBranch,
         }),
         field("date", "Fecha", "date", { value: today() }),
+        field("expectedDate", "Entrega prevista", "date", { required: false }),
+        field("reference", "Referencia / pedido", "text", {
+          required: false,
+          maxLength: 200,
+        }),
+        field("notes", "Observaciones de compra", "textarea", {
+          required: false,
+          maxLength: 1000,
+        }),
         field("items", "Productos · cantidad · costo unitario", "lines", {
           options: opts("products"),
           value: [],
@@ -1228,130 +1238,14 @@ export function Workspace({
     );
   else if (tab === "purchases")
     content = (
-      <>
-        <div className="page-heading">
-          <div>
-            <h1>Compras y proveedores</h1>
-            <p>Recibí mercadería y actualizá el stock en un paso.</p>
-          </div>
-          <div className="row-actions">
-            {newButton("suppliers", "Proveedor")}
-            {newButton("purchases", "Nueva compra")}
-          </div>
-        </div>
-        <div className="segmented">
-          <button
-            className={subtab !== "suppliers" ? "active" : ""}
-            onClick={() => setSubtab("")}
-          >
-            Compras
-          </button>
-          <button
-            className={subtab === "suppliers" ? "active" : ""}
-            onClick={() => setSubtab("suppliers")}
-          >
-            Proveedores
-          </button>
-        </div>
-        <Section
-          title={
-            subtab === "suppliers" ? "Tus proveedores" : "Órdenes de compra"
-          }
-        >
-          <div className="table-scroll">
-            {subtab === "suppliers" ? (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Proveedor</th>
-                    <th>Contacto</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {s.suppliers.map((p) => (
-                    <tr key={p.id}>
-                      <td>
-                        <strong>{p.name}</strong>
-                      </td>
-                      <td>
-                        {p.email}
-                        <small>{p.phone}</small>
-                      </td>
-                      <td>
-                        <button
-                          className="text-button"
-                          onClick={() => edit("suppliers", p)}
-                        >
-                          Editar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Proveedor</th>
-                    <th>Sucursal</th>
-                    <th>Total</th>
-                    <th>Estado</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {scoped(s.purchases).map((p) => (
-                    <tr key={p.id}>
-                      <td>{fmtDate(p.date)}</td>
-                      <td>
-                        {s.suppliers.find((v) => v.id === p.supplierId)?.name}
-                      </td>
-                      <td>{branchName(p.branchId)}</td>
-                      <td>
-                        {money(
-                          p.items.reduce((n, i) => n + i.quantity * i.cost, 0),
-                        )}
-                      </td>
-                      <td>
-                        <Badge value={p.status}>
-                          {p.status === "received" ? "Recibida" : "Pendiente"}
-                        </Badge>
-                      </td>
-                      <td>
-                        {p.status === "draft" && (
-                          <div className="row-actions">
-                            <button
-                              className="text-button"
-                              onClick={() => edit("purchases", p)}
-                            >
-                              Editar
-                            </button>
-                            <button
-                              className="button secondary small"
-                              onClick={() =>
-                                action(
-                                  "Recibir mercadería",
-                                  { action: "receivePurchase", id: p.id },
-                                  "Se sumarán las cantidades al stock y se actualizarán los costos.",
-                                )
-                              }
-                            >
-                              Recibir
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </Section>
-      </>
+      <PurchaseDesk
+        s={s}
+        branch={branch}
+        run={execute}
+        onEdit={(p) => edit("purchases", p)}
+        onSupplier={(p) => edit("suppliers", p)}
+        onNew={(initial) => edit("purchases", undefined, initial)}
+      />
     );
   else if (tab === "sales") {
     content = (

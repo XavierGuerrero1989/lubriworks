@@ -49,7 +49,11 @@ export const date = z
   );
 const optionalDate = z.union([date, z.literal("")]).default("");
 export const schemas = {
-  branches: z.object({ name, address: text }),
+  branches: z.object({
+    name,
+    address: text,
+    appointmentCapacity: z.number().int().min(1).max(50).optional(),
+  }),
   customers: z.object({
     name,
     email: z.string().email(),
@@ -127,7 +131,32 @@ export const schemas = {
     date: date,
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
     reason: name,
-    status: z.enum(["requested", "confirmed", "completed", "cancelled"]),
+    status: z.enum([
+      "requested",
+      "confirmed",
+      "completed",
+      "cancelled",
+      "no_show",
+    ]),
+    durationMinutes: z.number().int().min(5).max(720).optional(),
+    station: z.number().int().min(0).max(50).optional(),
+    statusReason: text.optional(),
+    rescheduleReason: text.optional(),
+    reschedules: z
+      .array(
+        z.object({
+          at: z.string().datetime(),
+          by: key,
+          reason: z.string().trim().min(1).max(1000),
+          fromDate: date,
+          fromTime: z.string(),
+          fromBranchId: key,
+          toDate: date,
+          toTime: z.string(),
+          toBranchId: key,
+        }),
+      )
+      .optional(),
     technician: z.string().max(120).default(""),
     orderId: key.optional(),
     receivedAt: z.string().datetime().optional(),

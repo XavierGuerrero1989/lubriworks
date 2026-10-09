@@ -791,4 +791,169 @@ describe("real API + Auth / Firestore emulators", () => {
       (await db.doc("tenants/alpha/orders/" + id).get()).data()?.deliveredBy,
     ).toBe("owner");
   });
+  it("reserves overlapping intervals atomically, permits capacity, and persists rescheduling and absence", async () => {
+    const { db } = admin();
+    const date = "2030-03-20";
+    await db
+      .doc("tenants/alpha/branches/agenda-test")
+      .set({ name: "Agenda", address: "", appointmentCapacity: 1 });
+    const data = (vehicleId: string, customerId: string, extra = {}) => ({
+      vehicleId,
+      customerId,
+      branchId: "agenda-test",
+      date,
+      time: "09:00",
+      reason: "Service",
+      technician: "",
+      durationMinutes: 60,
+      station: 0,
+      status: "confirmed",
+      ...extra,
+    });
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    const raced = await Promise.all(
+      [data("v1", "c1"), data("v2", "c2")].map((d, i) =>
+        call(
+          ownerToken,
+          "command",
+          { action: "save", collection: "appointments", data: d },
+          "alpha",
+          ids[i],
+        ),
+      ),
+    );
+    expect(raced.map((r) => r.status).sort()).toEqual([200, 400]);
+    const winner = raced.findIndex((r) => r.status === 200);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "save",
+            collection: "branches",
+            id: "agenda-test",
+            data: { name: "Agenda", address: "", appointmentCapacity: 2 },
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+    const loserData = winner === 0 ? data("v2", "c2") : data("v1", "c1");
+    const secondId = crypto.randomUUID();
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { action: "save", collection: "appointments", data: loserData },
+          "alpha",
+          secondId,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "save",
+            collection: "branches",
+            id: "agenda-test",
+            data: { name: "Agenda", address: "", appointmentCapacity: 1 },
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "save",
+            collection: "appointments",
+            id: secondId,
+            data: { ...loserData, time: "10:00" },
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    const moveId = crypto.randomUUID();
+    const move = {
+      action: "save",
+      collection: "appointments",
+      id: secondId,
+      data: {
+        ...loserData,
+        time: "10:00",
+        rescheduleReason: "Cliente reprogramó",
+        reschedules: [],
+      },
+    };
+    expect(
+      (await call(ownerToken, "command", move, "alpha", moveId)).status,
+    ).toBe(200);
+    expect(
+      (await call(ownerToken, "command", move, "alpha", moveId)).data.replayed,
+    ).toBe(true);
+    const moved = (
+      await db.doc("tenants/alpha/appointments/" + secondId).get()
+    ).data()!;
+    expect(moved.reschedules).toHaveLength(1);
+    expect(moved.reschedules[0].by).toBe("owner");
+    expect(moved.reschedules[0].fromTime).toBe("09:00");
+    expect(moved.reschedules[0].toTime).toBe("10:00");
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          {
+            action: "save",
+            collection: "appointments",
+            id: secondId,
+            data: moved,
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    const pastId = "agenda-absence";
+    await db
+      .doc("tenants/alpha/appointments/" + pastId)
+      .set(data("v1", "c1", { date: "2020-01-01", time: "08:00" }));
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "save",
+            collection: "appointments",
+            id: pastId,
+            data: data("v1", "c1", {
+              date: "2020-01-01",
+              time: "08:00",
+              status: "no_show",
+              statusReason: "No se presentó",
+            }),
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await db.doc("tenants/alpha/appointments/" + pastId).get()).data()
+        ?.statusReason,
+    ).toBe("No se presentó");
+  });
 });

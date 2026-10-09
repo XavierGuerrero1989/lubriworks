@@ -133,6 +133,11 @@ export async function loadCommandState(
     if (data.customerId) await doc("customers", data.customerId);
     if (data.vehicleId) await doc("vehicles", data.vehicleId);
     if (data.branchId) await doc("branches", data.branchId);
+    if (c === "branches")
+      await query(
+        "appointments",
+        col("appointments").where("branchId", "==", cmd.id || operationId),
+      );
     if (c === "vehicles") {
       await query(c, col(c).where("plate", "==", data.plate));
       await doc("reminders", `fire-${cmd.id || operationId}`);

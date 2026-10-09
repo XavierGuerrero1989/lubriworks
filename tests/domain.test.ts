@@ -402,7 +402,7 @@ describe("maintenance estimation", () => {
         }),
         "op",
       ),
-    ).toThrow("reservado");
+    ).toThrow("superpone");
   });
 });
 describe("cron authentication", () => {

@@ -1,3 +1,5 @@
+import { Agenda } from "./Agenda";
+import { availability, availableTimes } from "../../shared/agenda";
 import { OperationalDashboard } from "./OperationalDashboard";
 import { LubriAssistant } from "./LubriAssistant";
 import { auth } from "../lib/firebase";
@@ -205,12 +207,24 @@ export function Workspace({
     record?: any,
     initial: Record<string, any> = {},
   ) {
-    const d = record || initial;
+    const d = { ...record, ...initial };
     let fields: Field[] = [];
     if (collection === "branches")
       fields = [
         field("name", "Nombre"),
         field("address", "Dirección", "text", { required: false }),
+        field(
+          "appointmentCapacity",
+          "Puestos de atención simultánea",
+          "number",
+          {
+            min: 1,
+            max: 50,
+            step: "1",
+            value: 1,
+            hint: "Cada puesto admite un turno a la vez. No se puede reducir si afecta turnos reservados.",
+          },
+        ),
       ];
     if (collection === "customers")
       fields = [
@@ -333,7 +347,23 @@ export function Workspace({
         field("date", "Fecha", "date", { value: today() }),
         field("time", "Horario", "time"),
         field("reason", "Motivo"),
-        field("technician", "Técnico / puesto", "text", { required: false }),
+        field("durationMinutes", "Duración prevista (minutos)", "number", {
+          min: 5,
+          max: 720,
+          step: "1",
+          value: 60,
+        }),
+        field("technician", "Técnico responsable", "text", {
+          required: false,
+          hint: "Usá siempre el mismo nombre para controlar sus superposiciones entre sucursales.",
+        }),
+        field("station", "Número de puesto", "number", {
+          min: 0,
+          max: 50,
+          step: "1",
+          value: 0,
+          hint: "0 = por asignar. Usá 1, 2, etc., según la capacidad de la sucursal.",
+        }),
         field("status", "Estado", "text", {
           value: "confirmed",
           options: [
@@ -341,8 +371,25 @@ export function Workspace({
             { value: "confirmed", label: "Confirmado" },
             { value: "completed", label: "Completado" },
             { value: "cancelled", label: "Cancelado" },
+            { value: "no_show", label: "Ausente" },
           ],
         }),
+        field("statusReason", "Motivo de cancelación / ausencia", "textarea", {
+          showWhen: { key: "status", value: ["cancelled", "no_show"] },
+        }),
+        ...(record
+          ? [
+              field(
+                "rescheduleReason",
+                "Motivo de reprogramación",
+                "textarea",
+                {
+                  required: false,
+                  hint: "Obligatorio si cambiás la fecha, hora o sucursal. Queda en el historial.",
+                },
+              ),
+            ]
+          : []),
       ];
     if (collection === "orders")
       fields = [
@@ -404,6 +451,74 @@ export function Workspace({
     setDialog({
       title: `${record ? "Editar" : "Nuevo registro"} · ${{ branches: "Sucursal", customers: "Cliente", vehicles: "Vehículo", products: "Producto", suppliers: "Proveedor", services: "Servicio", appointments: "Turno", orders: "Orden de servicio", purchases: "Compra" }[collection]}`,
       fields,
+      preview:
+        collection === "appointments"
+          ? (values) => {
+              if (
+                !values.date ||
+                !values.time ||
+                !values.branchId ||
+                !values.vehicleId
+              )
+                return (
+                  <div className="agenda-availability">
+                    Elegí vehículo, fecha, horario y sucursal para ver la
+                    disponibilidad.
+                  </div>
+                );
+              const b = s.branches.find((r) => r.id === values.branchId);
+              if (!b) return null;
+              const candidate = {
+                ...d,
+                ...values,
+                id: record?.id || "preview",
+                durationMinutes: Number(values.durationMinutes || 60),
+                station: Number(values.station || 0),
+                technician: values.technician || "",
+              } as State["appointments"][number];
+              if (
+                !Number.isInteger(candidate.durationMinutes) ||
+                candidate.durationMinutes! < 5 ||
+                candidate.durationMinutes! > 720 ||
+                !Number.isInteger(candidate.station)
+              )
+                return (
+                  <div className="agenda-availability">
+                    Revisá la duración y el número de puesto.
+                  </div>
+                );
+              const conflict = availability(candidate, s.appointments, b);
+              const slots = availableTimes(
+                { ...candidate, status: "confirmed" },
+                s.appointments,
+                b,
+              );
+              return (
+                <div className="agenda-availability">
+                  <strong>Disponibilidad prevista</strong>
+                  <p className={conflict ? "conflict" : ""}>
+                    {conflict ||
+                      (candidate.status === "cancelled" ||
+                      candidate.status === "no_show"
+                        ? "Este estado libera la reserva del turno."
+                        : "El horario tiene capacidad para este turno.")}
+                  </p>
+                  {conflict && (
+                    <p>
+                      Alternativas desde ese horario:{" "}
+                      {slots.length
+                        ? slots.join(" · ")
+                        : "No hay horarios disponibles para esa duración en el resto del día."}
+                    </p>
+                  )}
+                  <small>
+                    La disponibilidad se vuelve a comprobar al guardar. Confirmá
+                    también que el horario coincida con la atención del local.
+                  </small>
+                </div>
+              );
+            }
+          : undefined,
       description:
         collection === "customers" && !record
           ? "Al guardar se crea su cuenta de acceso con este correo y contraseña, sin verificación de correo."
@@ -469,6 +584,17 @@ export function Workspace({
       ],
       submit: async (data) => execute({ action: "chargeOrder", id, ...data }),
     });
+  const receiveAppointment = (appointment: State["appointments"][number]) => {
+    const vehicle = s.vehicles.find((v) => v.id === appointment.vehicleId);
+    edit("orders", undefined, {
+      appointmentId: appointment.id,
+      vehicleId: appointment.vehicleId,
+      branchId: appointment.branchId,
+      technician: appointment.technician,
+      odometer: vehicle?.odometer,
+      notes: appointment.reason,
+    });
+  };
   const requestAppointment = (vehicleId?: string) =>
     setDialog({
       title: "Solicitar un turno",
@@ -676,19 +802,7 @@ export function Workspace({
           state={s}
           access={access}
           branch={branch}
-          onReceive={(appointment) => {
-            const vehicle = s.vehicles.find(
-              (v) => v.id === appointment.vehicleId,
-            );
-            edit("orders", undefined, {
-              appointmentId: appointment.id,
-              vehicleId: appointment.vehicleId,
-              branchId: appointment.branchId,
-              technician: appointment.technician,
-              odometer: vehicle?.odometer,
-              notes: appointment.reason,
-            });
-          }}
+          onReceive={receiveAppointment}
           onManageAppointment={(appointment) =>
             edit("appointments", appointment)
           }
@@ -922,93 +1036,15 @@ export function Workspace({
     );
   else if (tab === "appointments")
     content = (
-      <>
-        <div className="page-heading">
-          <div>
-            <h1>Agenda</h1>
-            <p>Organizá los turnos de cada sucursal.</p>
-          </div>
-          {newButton("appointments", "Nuevo turno")}
-        </div>
-        <div className="toolbar">
-          <SearchBox
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar cliente, patente o motivo…"
-          />
-          <input
-            type="date"
-            aria-label="Fecha de agenda"
-            value={subtab}
-            onChange={(e) => setSubtab(e.target.value)}
-          />
-        </div>
-        <Section
-          title={subtab ? `Turnos del ${fmtDate(subtab)}` : "Todos los turnos"}
-        >
-          {scoped(s.appointments).length ? (
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Fecha / hora</th>
-                    <th>Cliente / vehículo</th>
-                    <th>Motivo</th>
-                    <th>Sucursal / técnico</th>
-                    <th>Estado</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {scoped(s.appointments)
-                    .filter(
-                      (a) =>
-                        (!subtab || a.date === subtab) &&
-                        match(
-                          clientName(a.customerId),
-                          plate(a.vehicleId),
-                          a.reason,
-                        ),
-                    )
-                    .sort((a, b) =>
-                      (a.date + a.time).localeCompare(b.date + b.time),
-                    )
-                    .map((a) => (
-                      <tr key={a.id}>
-                        <td>
-                          <strong>{a.time}</strong>
-                          <small>{fmtDate(a.date)}</small>
-                        </td>
-                        <td>
-                          {clientName(a.customerId)}
-                          <small>{plate(a.vehicleId)}</small>
-                        </td>
-                        <td>{a.reason}</td>
-                        <td>
-                          {branchName(a.branchId)}
-                          <small>{a.technician || "Sin asignar"}</small>
-                        </td>
-                        <td>
-                          <Badge value={a.status} />
-                        </td>
-                        <td>
-                          <button
-                            className="text-button"
-                            onClick={() => edit("appointments", a)}
-                          >
-                            Gestionar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <Empty text="Todavía no hay turnos." />
-          )}
-        </Section>
-      </>
+      <Agenda
+        state={s}
+        branch={branch}
+        manager={manager}
+        onNew={(date) => edit("appointments", undefined, { date })}
+        onEdit={(a, initial) => edit("appointments", a, initial)}
+        onReceive={receiveAppointment}
+        onCapacity={(b) => edit("branches", b)}
+      />
     );
   else if (tab === "products")
     content = (

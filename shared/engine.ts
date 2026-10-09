@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { availability, agendaActive, duration } from "./agenda.js";
+import { localDay } from "./dashboard.js";
 import {
   canCharge,
   canManage,
@@ -212,33 +214,102 @@ export function execute(
           "Los productos por unidad requieren cantidades enteras.",
         );
       }
-    if (collection === "appointments") {
-      if (existing && (existing as any).orderId) {
-        data.orderId = (existing as any).orderId;
-        data.receivedAt = (existing as any).receivedAt;
+    if (collection === "branches") {
+      data.appointmentCapacity ??= (existing as any)?.appointmentCapacity ?? 1;
+      const relevant = s.appointments.filter(
+        (a) =>
+          a.branchId === entityId && a.date >= localDay(now) && agendaActive(a),
+      );
+      for (const a of data.appointmentCapacity !==
+      ((existing as any)?.appointmentCapacity ?? 1)
+        ? relevant
+        : []) {
+        const problem = availability(
+          { ...a, technician: "", vehicleId: `capacity-${a.id}` },
+          relevant.map((r) => ({
+            ...r,
+            technician: "",
+            vehicleId: `capacity-${r.id}`,
+          })),
+          { ...data, id: entityId },
+        );
         requireThat(
-          data.vehicleId === (existing as any).vehicleId &&
-            data.branchId === (existing as any).branchId,
-          "El turno recibido conserva vehículo y sucursal.",
+          !problem,
+          `La capacidad propuesta afecta turnos existentes. ${problem || ""}`,
+        );
+      }
+    }
+    if (collection === "appointments") {
+      const old = existing as State["appointments"][number] | undefined;
+      data.durationMinutes ??= old?.durationMinutes ?? 60;
+      data.station ??= old?.station ?? 0;
+      data.reschedules = old?.reschedules ?? [];
+      if (old?.orderId) {
+        data.orderId = old.orderId;
+        data.receivedAt = old.receivedAt;
+        requireThat(
+          data.vehicleId === old.vehicleId &&
+            data.branchId === old.branchId &&
+            data.date === old.date &&
+            data.time === old.time &&
+            data.durationMinutes === duration(old) &&
+            data.station === (old.station ?? 0) &&
+            data.status === old.status,
+          "El turno ya recibido no puede reprogramarse, cancelarse ni marcarse ausente. Gestioná su orden.",
         );
       } else {
         delete data.orderId;
         delete data.receivedAt;
       }
-    }
-    if (collection === "appointments")
-      requireThat(
-        !s.appointments.some(
-          (a) =>
-            a.id !== entityId &&
-            a.branchId === data.branchId &&
-            a.date === data.date &&
-            a.time === data.time &&
-            !["cancelled", "completed"].includes(a.status) &&
-            !["cancelled", "completed"].includes(data.status),
-        ),
-        "Ese horario ya está reservado en la sucursal.",
+      const moved =
+        old &&
+        (old.date !== data.date ||
+          old.time !== data.time ||
+          old.branchId !== data.branchId);
+      if (moved) {
+        requireThat(
+          agendaActive(old) && agendaActive(data),
+          "Reprogramá solamente turnos solicitados o confirmados.",
+        );
+        requireThat(
+          !!data.rescheduleReason?.trim(),
+          "Indicá el motivo de la reprogramación.",
+        );
+        data.reschedules = [
+          ...data.reschedules,
+          {
+            at: now,
+            by: member.uid,
+            reason: data.rescheduleReason.trim(),
+            fromDate: old.date,
+            fromTime: old.time,
+            fromBranchId: old.branchId,
+            toDate: data.date,
+            toTime: data.time,
+            toBranchId: data.branchId,
+          },
+        ];
+      }
+      delete data.rescheduleReason;
+      if (["cancelled", "no_show"].includes(data.status)) {
+        requireThat(
+          !!data.statusReason?.trim(),
+          "Indicá el motivo de cancelación o ausencia.",
+        );
+        if (data.status === "no_show")
+          requireThat(
+            Date.parse(data.date + "T" + data.time + ":00-03:00") <=
+              Date.parse(now),
+            "No se puede marcar ausente antes del horario del turno.",
+          );
+      } else data.statusReason = "";
+      const problem = availability(
+        { ...data, id: entityId },
+        s.appointments,
+        find(s.branches, data.branchId, "Sucursal"),
       );
+      requireThat(!problem, problem || "Turno no disponible.");
+    }
     if (collection === "orders") {
       for (const field of [
         "receivedAt",
@@ -543,16 +614,21 @@ export function execute(
     });
     find(s.branches, data.branchId);
     requireThat(data.date >= today(), "Elegí una fecha futura.");
-    requireThat(
-      !s.appointments.some(
-        (a) =>
-          a.branchId === data.branchId &&
-          a.date === data.date &&
-          a.time === data.time &&
-          !["cancelled", "completed"].includes(a.status),
-      ),
-      "Ese horario ya está reservado.",
+    // Portal requests do not assign staff, stations, lifecycle fields or history.
+    data.durationMinutes = 60;
+    data.station = 0;
+    data.technician = "";
+    delete data.orderId;
+    delete data.receivedAt;
+    delete data.reschedules;
+    delete data.rescheduleReason;
+    delete data.statusReason;
+    const problem = availability(
+      { ...data, id },
+      s.appointments,
+      find(s.branches, data.branchId, "Sucursal"),
     );
+    requireThat(!problem, problem || "Turno no disponible.");
     s.appointments.push({ ...data, id, vehicleId: v.id });
   } else if (cmd.action === "readNotice") {
     const n = find(s.notifications, cmd.id);

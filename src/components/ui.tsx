@@ -25,6 +25,7 @@ export const labels: Record<string, string> = {
   confirmed: "Confirmado",
   completed: "Completado",
   cancelled: "Cancelado",
+  no_show: "Ausente",
   draft: "Pendiente",
   cash: "Efectivo",
   transfer: "Transferencia",
@@ -121,13 +122,14 @@ export type Field = {
   minLength?: number;
   maxLength?: number;
   autoComplete?: string;
-  showWhen?: { key: string; value: string };
+  showWhen?: { key: string; value: string | string[] };
 };
 export type Dialog = {
   title: string;
   description?: string;
   fields: Field[];
   submitLabel?: string;
+  preview?: (values: Record<string, string>) => ReactNode;
   submit: (data: Record<string, any>) => Promise<void>;
 };
 export function FormDialog({
@@ -140,7 +142,9 @@ export function FormDialog({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [fieldValues, setFieldValues] = useState<Record<string, string>>(() =>
-      Object.fromEntries(dialog.fields.map((f) => [f.key, String(f.value ?? "")]))
+      Object.fromEntries(
+        dialog.fields.map((f) => [f.key, String(f.value ?? "")]),
+      ),
     );
   return (
     <div
@@ -170,10 +174,25 @@ export function FormDialog({
           </button>
         </header>
         <form
+          onInput={(e) => {
+            setError("");
+            setFieldValues(
+              Object.fromEntries(
+                Array.from(new FormData(e.currentTarget).entries()).map(
+                  ([key, value]) => [key, String(value)],
+                ),
+              ),
+            );
+          }}
           onChange={(e) => {
-            const input = e.target;
-            if (!(input instanceof HTMLInputElement || input instanceof HTMLSelectElement || input instanceof HTMLTextAreaElement)) return;
-            if (input.name) setFieldValues((values) => ({ ...values, [input.name]: input.value }));
+            setError("");
+            setFieldValues(
+              Object.fromEntries(
+                Array.from(new FormData(e.currentTarget).entries()).map(
+                  ([key, value]) => [key, String(value)],
+                ),
+              ),
+            );
           }}
           onSubmit={async (e) => {
             e.preventDefault();
@@ -201,71 +220,82 @@ export function FormDialog({
           }}
         >
           <div className="form-grid">
-            {dialog.fields.filter((f) => !f.showWhen || fieldValues[f.showWhen.key] === f.showWhen.value).map((f, i) =>
-              f.type === "lines" ? (
-                <div key={f.key} className="full">
-                  <p className="field-label">{f.label}</p>
-                  <Lines field={f} />
-                </div>
-              ) : (
-                <label
-                  key={f.key}
-                  className={f.type === "textarea" ? "full" : ""}
-                >
-                  {f.label}
-                  {f.required !== false && f.type !== "checkbox" && (
-                    <span className="required"> *</span>
-                  )}
-                  {f.type === "lines" ? (
+            {dialog.fields
+              .filter(
+                (f) =>
+                  !f.showWhen ||
+                  (Array.isArray(f.showWhen.value)
+                    ? f.showWhen.value.includes(fieldValues[f.showWhen.key])
+                    : fieldValues[f.showWhen.key] === f.showWhen.value),
+              )
+              .map((f, i) =>
+                f.type === "lines" ? (
+                  <div key={f.key} className="full">
+                    <p className="field-label">{f.label}</p>
                     <Lines field={f} />
-                  ) : f.options ? (
-                    <select
-                      name={f.key}
-                      defaultValue={String(f.value ?? "")}
-                      required={f.required !== false}
-                      autoFocus={i === 0}
-                    >
-                      <option value="">Seleccionar…</option>
-                      {f.options.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : f.type === "textarea" ? (
-                    <textarea
-                      name={f.key}
-                      defaultValue={String(f.value ?? "")}
-                      rows={3}
-                    />
-                  ) : f.type === "checkbox" ? (
-                    <input
-                      type="checkbox"
-                      name={f.key}
-                      defaultChecked={Boolean(f.value)}
-                    />
-                  ) : (
-                    <input
-                      autoFocus={i === 0}
-                      name={f.key}
-                      type={f.type || "text"}
-                      minLength={f.minLength}
-                      maxLength={f.maxLength}
-                      autoComplete={f.autoComplete}
-                      required={f.required !== false}
-                      defaultValue={String(f.value ?? "")}
-                      min={f.min ?? (f.type === "number" ? 0 : undefined)}
-                      max={f.max}
-                      step={
-                        f.step ?? (f.type === "number" ? "0.01" : undefined)
-                      }
-                    />
-                  )}{" "}
-                  {f.hint && <small>{f.hint}</small>}
-                </label>
-              ),
-            )}
+                  </div>
+                ) : (
+                  <label
+                    key={f.key}
+                    className={f.type === "textarea" ? "full" : ""}
+                  >
+                    {f.label}
+                    {f.required !== false && f.type !== "checkbox" && (
+                      <span className="required"> *</span>
+                    )}
+                    {f.type === "lines" ? (
+                      <Lines field={f} />
+                    ) : f.options ? (
+                      <select
+                        name={f.key}
+                        defaultValue={String(f.value ?? "")}
+                        required={f.required !== false}
+                        autoFocus={i === 0}
+                      >
+                        <option value="">Seleccionar…</option>
+                        {f.options.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : f.type === "textarea" ? (
+                      <textarea
+                        name={f.key}
+                        defaultValue={String(f.value ?? "")}
+                        rows={3}
+                        required={f.required !== false}
+                        maxLength={f.maxLength}
+                      />
+                    ) : f.type === "checkbox" ? (
+                      <input
+                        type="checkbox"
+                        name={f.key}
+                        defaultChecked={Boolean(f.value)}
+                      />
+                    ) : (
+                      <input
+                        autoFocus={i === 0}
+                        name={f.key}
+                        type={f.type || "text"}
+                        minLength={f.minLength}
+                        maxLength={f.maxLength}
+                        autoComplete={f.autoComplete}
+                        required={f.required !== false}
+                        defaultValue={String(f.value ?? "")}
+                        min={f.min ?? (f.type === "number" ? 0 : undefined)}
+                        max={f.max}
+                        step={
+                          f.step ?? (f.type === "number" ? "0.01" : undefined)
+                        }
+                      />
+                    )}{" "}
+                    {f.hint && <small>{f.hint}</small>}
+                  </label>
+                ),
+              )}
           </div>
+          {dialog.preview?.(fieldValues)}
           {error && (
             <p className="error" role="alert">
               {error}

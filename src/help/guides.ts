@@ -121,13 +121,18 @@ export const guides: HelpGuide[] = [
     scope: "staff",
     section: "appointments",
     title: "¿Cómo agendo o confirmo un turno?",
-    keywords: "agenda agendar turno cita reservar confirmar cancelar horario",
+    keywords:
+      "agenda agendar turno cita reservar confirmar cancelar horario duración capacidad puesto técnico reprogramar ausente ausencia",
     steps: [
       "Entrá a Agenda y tocá Nuevo turno.",
-      "Elegí el vehículo, sucursal, fecha, horario y motivo.",
-      "Revisá los turnos solicitados por clientes y actualizá su estado.",
-      "Si el turno se cancela, marcá Cancelado para liberar ese horario.",
+      "Definí la capacidad de cada sucursal desde Configurar capacidad: es la cantidad de puestos de atención simultánea.",
+      "Elegí vehículo, fecha, hora, duración, técnico y puesto. Usá 0 si todavía no asignaste un puesto. Revisá la disponibilidad antes de guardar.",
+      "Filtrá por día o por 7 días, estado y técnico. Para confirmar una solicitud, editá su estado a Confirmado.",
+      "Para reprogramar, cambiá la fecha, hora o sucursal y explicá el motivo; queda un historial en el turno.",
+      "Cancelar turno o Marcar ausente requieren un motivo y liberan la reserva. Ausente solo se admite después de la hora acordada.",
+      "Cuando llegue, tocá Recibir cliente para crear la orden vinculada. Un turno recibido se gestiona desde la orden y se completa al entregar el vehículo.",
     ],
+    note: "Los turnos sin duración se consideran de 60 minutos y las sucursales sin capacidad definida, de un puesto. Las sugerencias controlan reservas y capacidad; confirmá que el horario coincida con la atención del local.",
     destination: "appointments",
   },
   {

@@ -2570,3 +2570,96 @@ it("authorizes a client's own reviewed quote once, rejects stale and foreign dec
     await db.doc(`tenants/alpha/orders/${orderId}`).delete();
   }
 });
+
+it("lets customers reschedule and cancel only owned unreceived future appointments through authenticated RPC", async () => {
+  const { db } = admin(),
+    id = crypto.randomUUID(),
+    seed = demoState().appointments[0];
+  const now = new Date(),
+    day = new Date(now.getTime() + 7 * 86400000).toISOString().slice(0, 10),
+    moved = new Date(now.getTime() + 8 * 86400000).toISOString().slice(0, 10);
+  const ref = db.doc(`tenants/alpha/appointments/${id}`);
+  try {
+    await ref.set({
+      ...seed,
+      id,
+      customerId: "c1",
+      vehicleId: "v1",
+      branchId: "main",
+      date: day,
+      time: "10:00",
+      status: "confirmed",
+      technician: "",
+      station: 0,
+    });
+    const { clientAppointmentVersion } =
+      await import("../shared/clientAppointments");
+    const payload = {
+      action: "clientAppointment.reschedule",
+      id,
+      expectedVersion: clientAppointmentVersion(
+        (await ref.get()).data() as any,
+      ),
+      date: moved,
+      time: "11:00",
+      branchId: "main",
+      reason: "Cambio desde portal",
+    };
+    expect(
+      (await call(otherToken, "command", payload, "alpha", crypto.randomUUID()))
+        .status,
+    ).toBe(400);
+    expect(
+      (await call(clientToken, "command", payload, "beta", crypto.randomUUID()))
+        .status,
+    ).toBe(400);
+    const op = crypto.randomUUID(),
+      r = await call(clientToken, "command", payload, "alpha", op);
+    expect(r.status, JSON.stringify(r.data)).toBe(200);
+    expect(
+      (await call(clientToken, "command", payload, "alpha", op)).data.replayed,
+    ).toBe(true);
+    const a = (await ref.get()).data()!;
+    expect(a).toMatchObject({
+      date: moved,
+      status: "requested",
+      technician: "",
+      station: 0,
+    });
+    expect(a.reschedules[0].by).toBe("client");
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          payload,
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    const cancel = {
+      action: "clientAppointment.cancel",
+      id,
+      expectedVersion: clientAppointmentVersion(a as any),
+      reason: "No puedo asistir",
+    };
+    await ref.update({ orderId: "ot1001" });
+    expect(
+      (await call(clientToken, "command", cancel, "alpha", crypto.randomUUID()))
+        .status,
+    ).toBe(400);
+    await ref.set(a);
+    const cancelled = await call(
+      clientToken,
+      "command",
+      cancel,
+      "alpha",
+      crypto.randomUUID(),
+    );
+    expect(cancelled.status, JSON.stringify(cancelled.data)).toBe(200);
+    expect((await ref.get()).data()?.status).toBe("cancelled");
+  } finally {
+    await ref.delete();
+  }
+});

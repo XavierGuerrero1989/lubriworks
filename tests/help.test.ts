@@ -65,7 +65,14 @@ it("provides actionable instructions and valid destinations for all supported po
       "settings",
       "reports",
     ],
-    customer: ["vehicles", "history", "reminders", "notifications", "profile"],
+    customer: [
+      "appointments",
+      "vehicles",
+      "history",
+      "reminders",
+      "notifications",
+      "profile",
+    ],
     platform: ["overview", "tenants", "support", "audit", "help"],
   };
   for (const g of guides) {

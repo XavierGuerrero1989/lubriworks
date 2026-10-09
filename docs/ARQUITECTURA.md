@@ -89,3 +89,7 @@ El backend usa importaciones relativas con extensión `.js` y una comprobación 
 ## Inicio del portal del cliente
 
 `CustomerHome` prioriza órdenes propias activas, estima retiro sólo desde `expectedReadyAt` configurado por el lubricentro y distingue lecturas reales de kilometraje estimado. Las decisiones del cliente usan las operaciones transaccionales existentes, con titularidad comprobada antes de cargar inventario, revisión e importe esperado y fecha de creación del adicional. El servidor registra actor y método portal; reserva stock sin consumirlo hasta la finalización. No se incorporan colecciones ni permisos de escritura directa del cliente.
+
+## Mis turnos del cliente
+
+`CustomerAppointments` presenta próximos turnos e historial propios. `clientAppointment.reschedule` y `clientAppointment.cancel` se ejecutan en la transacción existente de RPC, con titularidad de turno/vehículo, control de versión y bloqueo al recibir o cerrar el turno o pasar su horario. Reprogramar conserva el historial, libera la asignación anterior, valida horarios/capacidad y vuelve a solicitado; la agenda confirma después. Los avisos operativos y la auditoría se persisten en la misma transacción. La descarga de calendario es un archivo ICS para importar, no una sincronización automática. Sin nuevas colecciones, reglas ni índices.

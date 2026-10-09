@@ -253,7 +253,7 @@ describe("agenda availability and appointment lifecycle", () => {
       action: "requestAppointment",
       vehicleId: "v2",
       branchId: "main",
-      date: new Date().toISOString().slice(0, 10),
+      date: "2026-10-10",
       time: "09:30",
       reason: "Service",
       durationMinutes: 5,

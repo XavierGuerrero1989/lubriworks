@@ -1,3 +1,5 @@
+import { localDay } from "../../shared/dashboard";
+import { CustomerAppointments } from "./CustomerAppointments";
 import { CustomerHome } from "./CustomerHome";
 import { AccessDesk } from "./AccessDesk";
 import { SettingsDesk } from "./SettingsDesk";
@@ -118,6 +120,7 @@ const nav = [
 ] as const;
 const clientNav = [
   ["vehicles", "Inicio / Mis vehículos", Car],
+  ["appointments", "Mis turnos", CalendarDays],
   ["history", "Historial de servicios", ClipboardList],
   ["reminders", "Próximos mantenimientos", CalendarDays],
   ["notifications", "Notificaciones", Bell],
@@ -789,7 +792,8 @@ export function Workspace({
   const requestAppointment = (vehicleId?: string) =>
     setDialog({
       title: "Solicitar un turno",
-      description: "El lubricentro confirmará tu solicitud.",
+      description:
+        "Elegí vehículo, sucursal y horario preferidos. La solicitud debe respetar los horarios de atención y queda pendiente de confirmación por el lubricentro.",
       fields: [
         field("vehicleId", "Vehículo", "text", {
           options: opts("vehicles", "plate"),
@@ -799,7 +803,9 @@ export function Workspace({
           options: opts("branches"),
           value: s.branches[0]?.id,
         }),
-        field("date", "Fecha preferida", "date", { value: today() }),
+        field("date", "Fecha preferida", "date", {
+          value: localDay(new Date().toISOString()),
+        }),
         field("time", "Horario preferido", "time"),
         field("reason", "Motivo"),
       ],
@@ -1176,7 +1182,16 @@ export function Workspace({
       </>
     );
   else if (tab === "appointments")
-    content = (
+    content = customer ? (
+      <CustomerAppointments
+        state={s}
+        access={access}
+        run={execute}
+        onRefresh={onRefresh}
+        onNew={() => requestAppointment()}
+        onVisit={() => go("vehicles")}
+      />
+    ) : (
       <Agenda
         state={s}
         branch={branch}
@@ -1386,7 +1401,7 @@ export function Workspace({
     content = (
       <Notifications
         branch={branch}
-        onVisit={() => go("vehicles")}
+        onVisit={(order) => go(order ? "vehicles" : "appointments")}
         onOrder={(id) => {
           setFocusedOrder(id);
           setBranch("all");

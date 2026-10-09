@@ -389,6 +389,7 @@ describe("maintenance estimation", () => {
   });
   it("prevents double-booking a slot", () => {
     const s = demoState();
+    s.appointments[0].date = "2030-03-20";
     expect(() =>
       execute(
         s,
@@ -396,7 +397,7 @@ describe("maintenance estimation", () => {
         cmd("requestAppointment", {
           vehicleId: "v1",
           branchId: "main",
-          date: today(),
+          date: "2030-03-20",
           time: "09:00",
           reason: "Service",
         }),

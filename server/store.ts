@@ -309,7 +309,19 @@ export async function loadCommandState(
       await doc("vehicleRecommendations", cmd.recommendationId);
   } else if (cmd.action === "profile")
     await doc("customers", member.customerId);
-  else if (cmd.action === "requestAppointment") {
+  else if (cmd.action.startsWith("clientAppointment.")) {
+    const a = await doc("appointments", cmd.id);
+    if (member.role !== "customer" || !a || a.customerId !== member.customerId)
+      throw new Error("Este turno no pertenece a tu cuenta.");
+    await doc("vehicles", a.vehicleId);
+    if (cmd.action === "clientAppointment.reschedule") {
+      await doc("branches", cmd.branchId);
+      await query(
+        "appointments",
+        col("appointments").where("date", "==", cmd.date),
+      );
+    }
+  } else if (cmd.action === "requestAppointment") {
     await doc("vehicles", cmd.vehicleId);
     await doc("branches", cmd.branchId);
     await query(

@@ -1,0 +1,136 @@
+.turn-filters,
+.turn-tabs,
+.turn-actions,
+.turn-card-top {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.turn-filters {
+  margin-bottom: 20px;
+  justify-content: space-between;
+}
+.turn-filters label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+.turn-filters select,
+.turn-form-fields select,
+.turn-form-fields input,
+.turn-modal textarea {
+  padding: 12px;
+  border: 1px solid var(--line, #dbe4e8);
+  border-radius: 10px;
+  background: white;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+.turn-hint {
+  padding: 14px;
+  background: #fff6e4;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.customer-turn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+.customer-turn-card {
+  background: white;
+  border: 1px solid #dbe4e8;
+  border-radius: 18px;
+  padding: 24px;
+  overflow-wrap: anywhere;
+}
+.turn-card-top {
+  justify-content: space-between;
+}
+.customer-turn-card h2 {
+  font-size: 23px;
+  margin: 18px 0 12px;
+}
+.customer-turn-card p {
+  line-height: 1.6;
+}
+.turn-location {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+}
+.turn-location p {
+  margin: 6px 0;
+}
+.turn-actions {
+  margin-top: 20px;
+}
+.turn-actions a {
+  text-decoration: none;
+}
+.customer-turn-card details {
+  margin: 16px 0;
+}
+.customer-turn-card summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.turn-modal {
+  width: min(760px, calc(100vw - 24px));
+  padding: 24px;
+}
+.turn-modal .modal-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+}
+.turn-form-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+.turn-form-fields label,
+.turn-modal > label {
+  display: grid;
+  gap: 8px;
+  font-weight: 600;
+}
+.turn-modal textarea {
+  min-height: 90px;
+}
+.turn-modal [role="alert"] {
+  color: #a52a24;
+}
+.turn-modal h2 {
+  margin-top: 0;
+}
+@media (max-width: 600px) {
+  .turn-form-fields {
+    grid-template-columns: 1fr;
+  }
+  .customer-turn-card {
+    padding: 20px;
+  }
+  .turn-filters > label,
+  .turn-filters > button {
+    width: 100%;
+  }
+  .turn-actions .button {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+  .turn-tabs {
+    width: 100%;
+  }
+  .turn-tabs button {
+    flex: 1;
+  }
+  .customer-turns .page-heading {
+    gap: 18px;
+  }
+}

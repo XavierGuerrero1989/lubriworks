@@ -326,6 +326,22 @@ export const guides: HelpGuide[] = [
     destination: "history",
   },
   {
+    id: "client-appointments",
+    scope: "customer",
+    section: "appointments",
+    title: "¿Cómo consulto, cambio o cancelo mi turno?",
+    keywords:
+      "turno cita agenda cancelar reprogramar cambiar fecha horario calendario direccion llegar",
+    steps: [
+      "Abrí Mis turnos. Próximos muestra solicitudes y turnos confirmados; Historial reúne visitas anteriores, canceladas o recibidas.",
+      "Solicitar turno permite elegir vehículo, sucursal, fecha y horario preferidos. Esperá la confirmación antes de venir.",
+      "Antes de la recepción y del horario del turno, podés Cambiar fecha o Cancelar turno indicando un motivo. Cambiar fecha libera el horario anterior y requiere una nueva confirmación.",
+      "En turnos confirmados podés Agregar al calendario. Usá Cómo llegar o Contactar cuando la sucursal tenga esos datos configurados.",
+    ],
+    note: "Los horarios respetan la atención y capacidad de la sucursal. Si el turno ya fue recibido o su horario pasó, coordiná con el lubricentro.",
+    destination: "appointments",
+  },
+  {
     id: "client-reminders",
     scope: "customer",
     section: "reminders",

@@ -1,3 +1,7 @@
+import {
+  clientAppointmentChange,
+  futureAppointment,
+} from "./clientAppointments.js";
 import { visitNotices } from "./visitNotices.js";
 import { z } from "zod";
 import { validateService, serviceAvailable, serviceLabel } from "./services.js";
@@ -193,6 +197,7 @@ export function execute(
     return s;
   };
   if (
+    clientAppointmentChange(s, member, cmd, now) ||
     purchaseOperations(s, member, cmd, id, now, useStock) ||
     orderOperations(s, member, cmd, id, now) ||
     vehicleOperations(s, member, cmd, id, now) ||
@@ -901,7 +906,10 @@ export function execute(
       status: "requested",
     });
     find(s.branches, data.branchId);
-    requireThat(data.date >= today(), "Elegí una fecha futura.");
+    requireThat(
+      futureAppointment(data.date, data.time, now),
+      "Elegí una fecha y hora futuras.",
+    );
     // Portal requests do not assign staff, stations, lifecycle fields or history.
     data.durationMinutes = 60;
     data.station = 0;

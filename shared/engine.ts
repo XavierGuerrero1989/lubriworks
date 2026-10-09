@@ -25,6 +25,7 @@ import {
 import { availability, agendaActive, duration } from "./agenda.js";
 import { localDay } from "./dashboard.js";
 import {
+  permissionLabels,
   canCharge,
   canManage,
   date,
@@ -84,6 +85,53 @@ export function execute(
   const manager = canManage(role),
     cashier = canCharge(role),
     staff = role !== "customer";
+  const permission = (p: import("./model.js").OperationPermission) =>
+    requireThat(
+      member.role === "owner" || member.permissions?.[p] !== false,
+      "Tu acceso no tiene permiso para " +
+        permissionLabels[p].toLowerCase() +
+        ".",
+    );
+  if (
+    [
+      "chargeOrder",
+      "sale",
+      "sale.pay",
+      "openCash",
+      "closeCash",
+      "payment.add",
+      "payment.reverse",
+    ].includes(cmd.action)
+  )
+    permission("charge");
+  if (
+    ["sale.discount", "payment.reverse"].includes(cmd.action) ||
+    Number(cmd.discount ?? 0) > 0
+  )
+    permission("discounts");
+  if (cmd.action === "vehicle.correctReading") permission("odometer");
+  if (cmd.action === "deliverOrder") permission("delivery");
+  if (
+    ["order.create", "order.quote", "order.addition"].includes(cmd.action) &&
+    cmd.labor !== undefined
+  )
+    permission("prices");
+  if (
+    cmd.action === "save" &&
+    ["products", "services"].includes(String(cmd.collection))
+  ) {
+    const rows =
+      cmd.collection === "products" ? original.products : original.services;
+    const existing = rows.find((v) => v.id === cmd.id) as any;
+    const values = cmd.data as any;
+    if (
+      !existing ||
+      (cmd.collection === "products"
+        ? values.price !== existing.price
+        : values.labor !== existing.labor)
+    )
+      permission("prices");
+  }
   const ownVehicle = (vehicleId: unknown) => {
     const v = find(s.vehicles, vehicleId, "Vehículo");
     requireThat(staff || v.customerId === member.customerId, "Vehículo ajeno.");
@@ -341,17 +389,60 @@ export function execute(
       validateService(s, { ...data, id: entityId });
     }
     if (collection === "branches") {
+      for (const field of [
+        "scheduleEnabled",
+        "commercialName",
+        "phone",
+        "contactEmail",
+        "hours",
+        "closedDates",
+        "technicians",
+        "stations",
+        "receptionChecklist",
+        "deliveryChecklist",
+      ])
+        if (
+          existing &&
+          !Object.hasOwn(cmd.data as object, field) &&
+          (existing as any)[field] !== undefined
+        )
+          data[field] = (existing as any)[field];
       data.appointmentCapacity ??= (existing as any)?.appointmentCapacity ?? 1;
+      requireThat(
+        new Set([
+          ...(data.receptionChecklist ?? []),
+          ...(data.deliveryChecklist ?? []),
+        ]).size <= 20,
+        "Usá hasta 20 controles distintos entre recepción y entrega.",
+      );
+      if (data.stations?.length)
+        requireThat(
+          data.stations.length === data.appointmentCapacity,
+          "La cantidad de puestos debe coincidir con la capacidad.",
+        );
+      if (data.technicians)
+        requireThat(
+          new Set(data.technicians.map((v: string) => v.toLowerCase())).size ===
+            data.technicians.length,
+          "No repitas técnicos.",
+        );
       const relevant = s.appointments.filter(
         (a) =>
           a.branchId === entityId && a.date >= localDay(now) && agendaActive(a),
       );
-      for (const a of data.appointmentCapacity !==
-      ((existing as any)?.appointmentCapacity ?? 1)
+      const operational = (value: any) =>
+        JSON.stringify({
+          capacity: value?.appointmentCapacity ?? 1,
+          hours: value?.hours,
+          enabled: value?.scheduleEnabled,
+          closed: value?.closedDates,
+          technicians: value?.technicians,
+        });
+      for (const a of operational(data) !== operational(existing)
         ? relevant
         : []) {
         const problem = availability(
-          { ...a, technician: "", vehicleId: `capacity-${a.id}` },
+          { ...a, vehicleId: `capacity-${a.id}` },
           relevant.map((r) => ({
             ...r,
             technician: "",
@@ -361,7 +452,7 @@ export function execute(
         );
         requireThat(
           !problem,
-          `La capacidad propuesta afecta turnos existentes. ${problem || ""}`,
+          `La configuración propuesta afecta turnos existentes. ${problem || ""}`,
         );
       }
     }
@@ -628,6 +719,13 @@ export function execute(
         !hasPendingAddition(o),
       "El presupuesto necesita aprobación antes de comenzar.",
     );
+    const reception =
+      s.branches.find((b) => b.id === o.branchId)?.receptionChecklist ?? [];
+    requireThat(
+      reception.every((c) => o.checklist.includes(c)),
+      "Completá los controles obligatorios de recepción: " +
+        reception.filter((c) => !o.checklist.includes(c)).join(", "),
+    );
     o.status = "working";
     o.startedAt = now;
     o.workStatus = "working";
@@ -641,6 +739,13 @@ export function execute(
       "Cobrá la orden antes de entregar el vehículo.",
     );
     requireThat(!o.deliveredAt, "El vehículo ya fue entregado.");
+    const delivery =
+      s.branches.find((b) => b.id === o.branchId)?.deliveryChecklist ?? [];
+    requireThat(
+      delivery.every((c) => o.checklist.includes(c)),
+      "Completá los controles obligatorios de entrega: " +
+        delivery.filter((c) => !o.checklist.includes(c)).join(", "),
+    );
     o.deliveredAt = now;
     o.deliveredBy = member.uid;
     o.workStatus = "delivered";

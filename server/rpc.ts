@@ -1,3 +1,4 @@
+import { operationPermissions } from "../shared/model.js";
 import { dispatchNotices } from "./notificationDelivery.js";
 import { orderPhotoRpc } from "./orderPhotos.js";
 import { createCustomerAccount } from "./customerAccounts.js";
@@ -315,6 +316,7 @@ export default async function handler(
           role: z.enum(roles),
           active: z.boolean(),
           customerId: key.nullable(),
+          permissions: operationPermissions.optional(),
         })
         .parse(payload);
       const user = await auth.getUserByEmail(data.email);
@@ -359,7 +361,16 @@ export default async function handler(
         );
         if ((!data.active || data.role !== "owner") && !remaining.length)
           throw new Error("La empresa debe conservar un administrador activo.");
-        const member: Member = { uid: user.uid, tenantId, ...data };
+        const previous = team.docs.find((d) => d.id === user.uid)?.data() as
+          Member | undefined;
+        const member: Member = {
+          uid: user.uid,
+          tenantId,
+          ...data,
+          ...(data.permissions || previous?.permissions
+            ? { permissions: data.permissions ?? previous?.permissions }
+            : {}),
+        };
         tx.set(db.doc(`tenants/${tenantId}/members/${user.uid}`), member);
         tx.set(db.doc(`userTenants/${user.uid}/tenants/${tenantId}`), {
           tenantId,

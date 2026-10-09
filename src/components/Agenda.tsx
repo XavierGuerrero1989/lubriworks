@@ -224,7 +224,9 @@ export function Agenda({
                   <small>
                     {branchName(a.branchId)} ·{" "}
                     {a.technician || "Técnico sin asignar"} ·{" "}
-                    {a.station ? `Puesto ${a.station}` : "Puesto sin asignar"}
+                    {a.station
+                      ? `Puesto ${a.station}${state.branches.find((b) => b.id === a.branchId)?.stations?.[a.station - 1] ? " · " + state.branches.find((b) => b.id === a.branchId)?.stations?.[a.station - 1] : ""}`
+                      : "Puesto sin asignar"}
                   </small>
                   {a.statusReason && (
                     <p className="agenda-reason">Motivo: {a.statusReason}</p>

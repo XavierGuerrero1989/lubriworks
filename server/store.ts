@@ -207,6 +207,7 @@ export async function loadCommandState(
     }
   } else if (cmd.action === "startOrder" || cmd.action === "deliverOrder") {
     const order = await doc("orders", cmd.id);
+    if (order) await doc("branches", order.branchId);
     if (cmd.action === "startOrder" && order) {
       await products(approvedItems(order));
       await activeOrders(order.branchId);

@@ -5,7 +5,7 @@ import { admin } from "../server/firebase";
 import handler from "../server/rpc";
 import cron from "../server/reminders";
 import { loadCommandState, PAGE_SIZE } from "../server/store";
-import { demoState } from "../shared/demo";
+import { demoAccess, demoState } from "../shared/demo";
 import { today } from "../shared/model";
 process.env.FIREBASE_PROJECT_ID = "demo-lubriworks";
 let server: Server,
@@ -174,6 +174,82 @@ describe("real API + Auth / Firestore emulators", () => {
     });
     expect(r.status).toBe(400);
     expect(r.data.error).toContain("Sólo el administrador");
+  });
+  it("persists per-member permissions, enforces them server-side and preserves them through older edits", async () => {
+    const { db } = admin();
+    await db
+      .doc("tenants/alpha/members/owner")
+      .update({ role: "manager", permissions: { charge: false } });
+    try {
+      const denied = await call(
+        ownerToken,
+        "command",
+        { action: "openCash", branchId: "north", opening: 0 },
+        "alpha",
+        crypto.randomUUID(),
+      );
+      expect(denied.status).toBe(400);
+      expect(denied.data.error).toContain("permiso");
+      const forged = await call(ownerToken, "member.save", {
+        email: "owner@test.local",
+        name: "Owner",
+        role: "owner",
+        active: true,
+        customerId: null,
+        permissions: { charge: true },
+      });
+      expect(forged.status).toBe(400);
+    } finally {
+      await db.doc("tenants/alpha/members/owner").update({ role: "owner" });
+    }
+    const r = await call(ownerToken, "member.save", {
+      email: "owner@test.local",
+      name: "Owner",
+      role: "owner",
+      active: true,
+      customerId: null,
+    });
+    expect(r.status).toBe(200);
+    expect(
+      (await db.doc("tenants/alpha/members/owner").get()).data()?.permissions
+        .charge,
+    ).toBe(false);
+  });
+  it("loads branch requirements for start and delivery in command transactions", async () => {
+    const { db } = admin();
+    await db
+      .doc("tenants/alpha/branches/main")
+      .update({
+        receptionChecklist: ["Entrada"],
+        deliveryChecklist: ["Salida"],
+      });
+    try {
+      for (const action of ["startOrder", "deliverOrder"]) {
+        const s = await db.runTransaction(
+          (tx) =>
+            loadCommandState(
+              db,
+              tx,
+              "alpha",
+              { ...demoAccess.member, tenantId: "alpha" },
+              { action, id: "ot1001" },
+              "config-read",
+            ),
+          { readOnly: true },
+        );
+        expect(
+          s.branches.find((b) => b.id === "main")?.deliveryChecklist,
+        ).toEqual(["Salida"]);
+      }
+    } finally {
+      await db
+        .doc("tenants/alpha/branches/main")
+        .set({
+          id: "main",
+          name: "Casa central",
+          address: "Av. San Martín 1450",
+        });
+    }
   });
   it("cannot remove the last owner", async () => {
     const r = await call(ownerToken, "member.save", {

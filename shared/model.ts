@@ -24,6 +24,29 @@ export type Tenant = {
   schemaVersion: 1;
   createdAt: string;
 };
+export const operationPermissions = z.object({
+  prices: z.boolean().optional(),
+  discounts: z.boolean().optional(),
+  odometer: z.boolean().optional(),
+  charge: z.boolean().optional(),
+  delivery: z.boolean().optional(),
+});
+export type OperationPermission = keyof z.infer<typeof operationPermissions>;
+export const permissionLabels: Record<OperationPermission, string> = {
+  prices: "Modificar precios",
+  discounts: "Aplicar descuentos",
+  odometer: "Corregir kilometraje",
+  charge: "Cobrar y operar caja",
+  delivery: "Entregar vehículos",
+};
+export function permitted(member: Member, permission: OperationPermission) {
+  if (member.role === "owner") return true;
+  const baseline =
+    permission === "charge" || permission === "delivery"
+      ? canCharge(member.role)
+      : canManage(member.role);
+  return baseline && member.permissions?.[permission] !== false;
+}
 export type Member = {
   uid: string;
   tenantId: string;
@@ -32,6 +55,7 @@ export type Member = {
   name: string;
   email: string;
   customerId: string | null;
+  permissions?: z.infer<typeof operationPermissions>;
 };
 export type Access = { tenant: Tenant; member: Member };
 const name = z.string().trim().min(1, "Completá el nombre").max(120);
@@ -67,6 +91,36 @@ export const schemas = {
     name,
     address: text,
     appointmentCapacity: z.number().int().min(1).max(50).optional(),
+    commercialName: z.string().trim().max(120).optional(),
+    phone: z.string().trim().max(40).optional(),
+    contactEmail: z.union([z.string().email(), z.literal("")]).optional(),
+    scheduleEnabled: z.boolean().optional(),
+    hours: z
+      .array(
+        z
+          .object({
+            day: z.number().int().min(0).max(6),
+            open: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+            close: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+          })
+          .refine(
+            (v) => v.open < v.close,
+            "El cierre debe ser posterior a la apertura.",
+          ),
+      )
+      .max(21)
+      .optional(),
+    closedDates: z.array(date).max(366).optional(),
+    technicians: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
+    stations: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
+    receptionChecklist: z
+      .array(z.string().trim().min(1).max(80))
+      .max(20)
+      .optional(),
+    deliveryChecklist: z
+      .array(z.string().trim().min(1).max(80))
+      .max(20)
+      .optional(),
   }),
   customers: z.object({
     name,
@@ -360,6 +414,7 @@ export type Reminder = {
 export type Sale = {
   id: string;
   customerId: string | null;
+  permissions?: z.infer<typeof operationPermissions>;
   branchId: string;
   orderId: string | null;
   date: string;
@@ -385,6 +440,7 @@ export type Payment = {
   id: string;
   saleId: string;
   customerId: string | null;
+  permissions?: z.infer<typeof operationPermissions>;
   branchId: string;
   cashSessionId: string;
   kind: "receipt" | "refund";

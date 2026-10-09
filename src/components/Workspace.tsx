@@ -1,3 +1,5 @@
+import { AccessDesk } from "./AccessDesk";
+import { SettingsDesk } from "./SettingsDesk";
 import { ReportsDesk } from "./ReportsDesk";
 import { ServiceDesk } from "./ServiceDesk";
 import { serviceLabel } from "../../shared/services";
@@ -51,6 +53,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import {
+  permissionLabels,
+  permitted,
   canManage,
   canCharge,
   dueInfo,
@@ -134,7 +138,7 @@ export function Workspace({
 }: Props) {
   const customer = access.member.role === "customer",
     manager = canManage(access.member.role),
-    charge = canCharge(access.member.role);
+    charge = permitted(access.member, "charge");
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [receipt, setReceipt] = useState<Sale | null>(null);
   const [focusedOrder, setFocusedOrder] = useState("");
@@ -255,6 +259,9 @@ export function Workspace({
           value: initial.odometer,
         }),
         field("technician", "Técnico responsable", "text", {
+          suggestions: [
+            ...new Set(s.branches.flatMap((b) => b.technicians ?? [])),
+          ],
           value: initial.technician || "",
           required: false,
         }),
@@ -534,6 +541,9 @@ export function Workspace({
           value: 60,
         }),
         field("technician", "Técnico responsable", "text", {
+          suggestions: [
+            ...new Set(s.branches.flatMap((b) => b.technicians ?? [])),
+          ],
           required: false,
           hint: "Usá siempre el mismo nombre para controlar sus superposiciones entre sucursales.",
         }),
@@ -588,7 +598,12 @@ export function Workspace({
         }),
         field("odometer", "Kilometraje al ingresar", "number", { step: "1" }),
         field("date", "Fecha de recepción", "date", { value: today() }),
-        field("technician", "Técnico responsable", "text", { required: false }),
+        field("technician", "Técnico responsable", "text", {
+          suggestions: [
+            ...new Set(s.branches.flatMap((b) => b.technicians ?? [])),
+          ],
+          required: false,
+        }),
         field("status", "Estado", "text", {
           value: "received",
           options: [
@@ -1245,7 +1260,7 @@ export function Workspace({
       <SalesDesk
         s={s}
         branch={branch}
-        manager={manager}
+        manager={permitted(access.member, "discounts")}
         execute={execute}
         onCharge={chargeOrder}
         onSalePay={(saleId) => setCheckout({ saleId })}
@@ -1280,132 +1295,12 @@ export function Workspace({
             <p>El espacio de {access.tenant.name}.</p>
           </div>
         </div>
-        <div className="dashboard-bottom">
-          <Section
-            title="Sucursales"
-            action={newButton("branches", "Sucursal")}
-          >
-            <div className="bars">
-              {s.branches.map((b) => (
-                <div className="payment-row" key={b.id}>
-                  <div>
-                    <strong>{b.name}</strong>
-                    <small>{b.address || "Sin dirección"}</small>
-                  </div>
-                  <button
-                    className="text-button"
-                    onClick={() => edit("branches", b)}
-                  >
-                    Editar
-                  </button>
-                </div>
-              ))}
-            </div>
-          </Section>
-          <Section
-            title="Accesos y roles"
-            subtitle="Administradores, empleados y clientes"
-          >
-            <div className="settings-body">
-              <ShieldCheck size={28} />
-              <p>
-                Los usuarios se registran con correo y contraseña. Después
-                vinculás su acceso a esta empresa.
-              </p>
-              <p>
-                Los clientes sólo ven sus propios vehículos, servicios y avisos.
-              </p>
-              {access.member.role === "owner" && (
-                <>
-                  <button
-                    className="button primary"
-                    onClick={() =>
-                      setDialog({
-                        title: "Vincular o actualizar acceso",
-                        description:
-                          "Usá un correo ya registrado. Para modificar un acceso, ingresá el mismo correo.",
-                        fields: [
-                          field("email", "Correo de acceso", "email"),
-                          field("name", "Nombre"),
-                          field("role", "Rol", "text", {
-                            options: Object.entries(roleLabels).map(
-                              ([value, label]) => ({ value, label }),
-                            ),
-                            value: "customer",
-                          }),
-                          field(
-                            "customerId",
-                            "Ficha de cliente (sólo para rol Cliente)",
-                            "text",
-                            { options: opts("customers"), required: false },
-                          ),
-                          field("active", "Acceso activo", "checkbox", {
-                            value: true,
-                          }),
-                        ],
-                        submit: async (data) => {
-                          if (demo) {
-                            throw new Error(
-                              "La gestión de accesos requiere Firebase. La demo no crea usuarios.",
-                            );
-                          }
-                          await rpc(
-                            "member.save",
-                            {
-                              ...data,
-                              customerId:
-                                data.role === "customer"
-                                  ? data.customerId
-                                  : null,
-                            },
-                            access.tenant.id,
-                          );
-                          setNotice("Acceso actualizado.");
-                        },
-                      })
-                    }
-                  >
-                    Gestionar un acceso
-                  </button>
-                  <button
-                    className="button secondary"
-                    onClick={async () => {
-                      try {
-                        if (demo) {
-                          setNotice(
-                            "Demo: administrador y cliente de prueba disponibles desde el selector superior.",
-                          );
-                          return;
-                        }
-                        const members = await rpc<any[]>(
-                          "members",
-                          {},
-                          access.tenant.id,
-                        );
-                        setDialog({
-                          title: "Equipo y clientes con acceso",
-                          description: members
-                            .map(
-                              (m) =>
-                                `${m.name} · ${m.email} · ${roleLabels[m.role as keyof typeof roleLabels]} · ${m.active ? "Activo" : "Inactivo"}`,
-                            )
-                            .join("\n"),
-                          fields: [],
-                          submitLabel: "Cerrar",
-                          submit: async () => {},
-                        });
-                      } catch (e) {
-                        setNotice((e as Error).message);
-                      }
-                    }}
-                  >
-                    Ver accesos
-                  </button>
-                </>
-              )}
-            </div>
-          </Section>
-        </div>
+        <SettingsDesk
+          state={s}
+          run={execute}
+          newBranch={() => edit("branches")}
+        />
+        <AccessDesk access={access} state={s} demo={demo} />
         <div className="security-note">
           <ShieldCheck />
           <div>
@@ -1861,7 +1756,7 @@ export function Workspace({
           key={JSON.stringify(checkout)}
           target={checkout}
           s={s}
-          manager={manager}
+          manager={permitted(access.member, "discounts")}
           execute={execute}
           onClose={() => setCheckout(null)}
         />

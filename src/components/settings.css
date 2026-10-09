@@ -1,0 +1,138 @@
+.configuration-intro,
+.configuration-selector,
+.configuration-save {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  margin: 20px 0;
+}
+.configuration-intro svg {
+  vertical-align: middle;
+  margin-right: 8px;
+  color: var(--petrol);
+}
+.configuration-intro p,
+.configuration-save p,
+.configuration-body p {
+  color: var(--muted);
+  font-size: 13px;
+}
+.configuration-selector span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.configuration-form {
+  display: grid;
+  gap: 20px;
+}
+.configuration-grid {
+  padding: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.configuration-body {
+  padding: 24px;
+  display: grid;
+  gap: 15px;
+}
+.configuration-form label,
+.configuration-selector label {
+  display: grid;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--petrol);
+}
+.configuration-form input:not([type="checkbox"]),
+.configuration-form textarea,
+.configuration-selector select {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: white;
+  color: var(--petrol);
+  font: inherit;
+}
+.configuration-form textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.configuration-form small {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.configuration-form .configuration-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.configuration-day {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+  gap: 12px;
+}
+.configuration-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.configuration-slot input {
+  max-width: 140px;
+}
+.configuration-error {
+  padding: 15px;
+  background: #fff1ed;
+  border-radius: 9px;
+  color: #a13224;
+}
+.configuration-save {
+  margin-top: 0;
+}
+.configuration-save p {
+  max-width: 650px;
+}
+.configuration-save button {
+  flex-shrink: 0;
+}
+@media (max-width: 650px) {
+  .configuration-grid {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+  .configuration-body {
+    padding: 18px;
+  }
+  .configuration-intro,
+  .configuration-selector,
+  .configuration-save {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .configuration-selector span {
+    display: none;
+  }
+  .configuration-day {
+    grid-template-columns: 1fr;
+  }
+  .configuration-slot {
+    gap: 5px;
+  }
+  .configuration-slot input {
+    min-width: 0;
+  }
+  .configuration-save button {
+    width: 100%;
+  }
+}

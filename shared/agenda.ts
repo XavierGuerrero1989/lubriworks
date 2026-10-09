@@ -28,6 +28,28 @@ export function availability(
   if (!agendaActive(candidate)) return null;
   if (minutes(candidate.time) + duration(candidate) > 1440)
     return "El turno debe terminar dentro del mismo día.";
+  const startTime = minutes(candidate.time),
+    endTime = startTime + duration(candidate);
+  if (branch.closedDates?.includes(candidate.date))
+    return "La sucursal está cerrada en esa fecha.";
+  if (branch.hours !== undefined && branch.scheduleEnabled !== false) {
+    const day = new Date(candidate.date + "T12:00:00Z").getUTCDay();
+    if (
+      !branch.hours.some(
+        (h) =>
+          h.day === day &&
+          minutes(h.open) <= startTime &&
+          minutes(h.close) >= endTime,
+      )
+    )
+      return "El turno queda fuera de los días u horarios de atención.";
+  }
+  if (
+    branch.technicians?.length &&
+    candidate.technician &&
+    !branch.technicians.includes(candidate.technician.trim())
+  )
+    return "Seleccioná un técnico configurado para esta sucursal.";
   const capacity = branch.appointmentCapacity ?? 1;
   if ((candidate.station ?? 0) > capacity)
     return `La sucursal tiene ${capacity} puestos. Revisá el puesto asignado.`;

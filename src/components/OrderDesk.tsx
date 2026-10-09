@@ -4,6 +4,7 @@ import { paymentLabel, orderBalance, salePaid } from "../../shared/billing";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  permitted,
   canCharge,
   canManage,
   type Access,
@@ -81,7 +82,7 @@ export function OrderDesk({
   demo: boolean;
 }) {
   const manager = canManage(access.member.role),
-    charge = canCharge(access.member.role),
+    charge = permitted(access.member, "charge"),
     technical = access.member.role !== "cashier";
   const [selected, setSelected] = useState(focusId),
     [query, setQuery] = useState(""),
@@ -244,6 +245,14 @@ export function OrderDesk({
         run({ action: "order.consumption", id: o!.id, ...data }),
     });
   };
+  const requiredControls = () => [
+    ...new Set([
+      ...(s.branches.find((b) => b.id === o!.branchId)?.receptionChecklist ??
+        []),
+      ...(s.branches.find((b) => b.id === o!.branchId)?.deliveryChecklist ??
+        []),
+    ]),
+  ];
   const update = () =>
     setDialog({
       title: "Ficha de trabajo",
@@ -257,10 +266,25 @@ export function OrderDesk({
           required: false,
           maxLength: 1000,
         }),
-        field("checklist", "Controles realizados", "textarea", {
-          value: o!.checklist.join(", "),
+        ...requiredControls().map((c, i) =>
+          field(`control_${i}`, c, "checkbox", {
+            value: o!.checklist.includes(c),
+          }),
+        ),
+        field("checklist", "Otros controles realizados", "textarea", {
+          value: o!.checklist
+            .filter((c) => !requiredControls().includes(c))
+            .join(", "),
           required: false,
-          hint: "Separá los controles por coma.",
+          hint:
+            "Separá los controles por coma. Obligatorios de recepción: " +
+            (s.branches
+              .find((b) => b.id === o!.branchId)
+              ?.receptionChecklist?.join(", ") || "ninguno") +
+            ". De entrega: " +
+            (s.branches
+              .find((b) => b.id === o!.branchId)
+              ?.deliveryChecklist?.join(", ") || "ninguno"),
         }),
         field(
           "recommendations",
@@ -279,10 +303,17 @@ export function OrderDesk({
           id: o!.id,
           data: {
             ...data,
-            checklist: String(data.checklist)
-              .split(",")
-              .map((v) => v.trim())
-              .filter(Boolean),
+            checklist: [
+              ...new Set([
+                ...requiredControls().filter(
+                  (_, i) => data[`control_${i}`] === true,
+                ),
+                ...String(data.checklist)
+                  .split(",")
+                  .map((v) => v.trim())
+                  .filter(Boolean),
+              ]),
+            ],
           },
         }),
     });
@@ -552,20 +583,22 @@ export function OrderDesk({
                     Cobrar servicio
                   </button>
                 )}
-                {open && o.status === "paid" && charge && (
-                  <button
-                    className="button primary"
-                    onClick={() =>
-                      command(
-                        "Entregar vehículo",
-                        { action: "deliverOrder", id: o.id },
-                        "Se registrará la entrega y se completará el turno vinculado.",
-                      )
-                    }
-                  >
-                    Entregar vehículo
-                  </button>
-                )}
+                {open &&
+                  o.status === "paid" &&
+                  permitted(access.member, "delivery") && (
+                    <button
+                      className="button primary"
+                      onClick={() =>
+                        command(
+                          "Entregar vehículo",
+                          { action: "deliverOrder", id: o.id },
+                          "Se registrará la entrega y se completará el turno vinculado.",
+                        )
+                      }
+                    >
+                      Entregar vehículo
+                    </button>
+                  )}
                 {s.sales.some((v) => v.orderId === o.id) && (
                   <button className="button" onClick={() => onReceipt(o)}>
                     Comprobante

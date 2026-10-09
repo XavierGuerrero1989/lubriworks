@@ -1,6 +1,7 @@
 import { paymentLabel } from "../../shared/billing";
 import { useState } from "react";
 import {
+  permitted,
   canManage,
   dueInfo,
   estimatedKm,
@@ -405,7 +406,7 @@ export function CustomerDesk({
                 <button className="button" onClick={() => onReading(selected)}>
                   Nueva lectura real
                 </button>
-                {manager && (
+                {permitted(access.member, "odometer") && (
                   <button className="button" onClick={correct}>
                     Corregir kilometraje
                   </button>

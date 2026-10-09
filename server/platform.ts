@@ -1,3 +1,4 @@
+import { operationPermissions } from "../shared/model.js";
 import { z } from "zod";
 import { readPages, memberGuards } from "./store.js";
 import type { Firestore } from "firebase-admin/firestore";
@@ -123,6 +124,7 @@ export async function saveMember(
       role: z.enum(roles),
       active: z.boolean(),
       customerId: key.nullable(),
+      permissions: operationPermissions.optional(),
       expectedUid: key.optional(),
     })
     .parse(payload);
@@ -168,6 +170,14 @@ export async function saveMember(
     const { id, expectedUid, ...values } = data;
     tx.set(ref.collection("members").doc(user.uid), {
       ...values,
+      ...(values.permissions ||
+      members.docs.find((m) => m.id === user.uid)?.data().permissions
+        ? {
+            permissions:
+              values.permissions ??
+              members.docs.find((m) => m.id === user.uid)?.data().permissions,
+          }
+        : {}),
       uid: user.uid,
       tenantId: id,
     });

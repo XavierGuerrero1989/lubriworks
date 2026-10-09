@@ -126,6 +126,7 @@ export type Field = {
   omitWhenEmpty?: boolean;
   readOnly?: boolean;
   options?: { value: string; label: string }[];
+  suggestions?: string[];
   value?: unknown;
   min?: number;
   max?: number;
@@ -261,6 +262,13 @@ export function FormDialog({
                         {o.label}
                       </label>
                     ))}
+                    {f.suggestions?.length ? (
+                      <datalist id={`suggestions-${f.key}`}>
+                        {f.suggestions.map((v) => (
+                          <option key={v} value={v} />
+                        ))}
+                      </datalist>
+                    ) : null}
                     {f.hint && <small>{f.hint}</small>}
                   </fieldset>
                 ) : f.type === "lines" ? (
@@ -309,6 +317,11 @@ export function FormDialog({
                       />
                     ) : (
                       <input
+                        list={
+                          f.suggestions?.length
+                            ? `suggestions-${f.key}`
+                            : undefined
+                        }
                         autoFocus={i === 0}
                         name={f.key}
                         type={f.type || "text"}
@@ -325,6 +338,13 @@ export function FormDialog({
                         }
                       />
                     )}{" "}
+                    {f.suggestions?.length ? (
+                      <datalist id={`suggestions-${f.key}`}>
+                        {f.suggestions.map((v) => (
+                          <option key={v} value={v} />
+                        ))}
+                      </datalist>
+                    ) : null}
                     {f.hint && <small>{f.hint}</small>}
                   </label>
                 ),

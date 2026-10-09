@@ -251,10 +251,13 @@ export const guides: HelpGuide[] = [
     keywords:
       "configuracion sucursal empresa permisos usuario empleado tecnico encargado administrador cuenta vincular correo",
     steps: [
-      "En Configuración, agregá o editá las sucursales del lubricentro.",
-      "En Accesos, el administrador vincula una cuenta existente por correo.",
+      "En Configuración, elegí una sucursal y completá identidad y contacto.",
+      "Configurá días, intervalos de atención y cierres excepcionales. Los turnos deben respetarlos.",
+      "Definí técnicos, capacidad y nombres de puestos. Reprogramá los turnos afectados antes de reducir recursos.",
+      "Definí controles obligatorios de recepción y entrega: se marcan en Ficha de trabajo antes de iniciar o entregar.",
+      "En Accesos y permisos, el administrador vincula una cuenta existente por correo o edita un acceso de la lista.",
       "Elegí su rol y, si es cliente, la ficha que corresponde.",
-      "Revisá que el acceso esté activo y guardá.",
+      "Revisá el acceso activo y los permisos individuales. Sólo habilitan acciones admitidas por el rol. Guardá.",
     ],
     note: "Una empresa puede tener varias sucursales. El selector de empresas se usa cuando la cuenta pertenece a más de un lubricentro.",
     destination: "settings",

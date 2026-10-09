@@ -93,3 +93,9 @@ El backend usa importaciones relativas con extensión `.js` y una comprobación 
 ## Mis turnos del cliente
 
 `CustomerAppointments` presenta próximos turnos e historial propios. `clientAppointment.reschedule` y `clientAppointment.cancel` se ejecutan en la transacción existente de RPC, con titularidad de turno/vehículo, control de versión y bloqueo al recibir o cerrar el turno o pasar su horario. Reprogramar conserva el historial, libera la asignación anterior, valida horarios/capacidad y vuelve a solicitado; la agenda confirma después. Los avisos operativos y la auditoría se persisten en la misma transacción. La descarga de calendario es un archivo ICS para importar, no una sincronización automática. Sin nuevas colecciones, reglas ni índices.
+
+## Historial de servicios del cliente
+
+`CustomerHistory` filtra visitas propias por vehículo, estado, período y búsqueda. `shared/clientHistory.ts` reconstruye detalle desde las instantáneas de servicios, insumos facturados y consumos confirmados; los importes y saldos usan la venta y su registro de pagos actual. Las próximas fechas/km mostradas son referencias históricas de esa visita, no avisos vigentes.
+
+`order.customerReport` guarda exclusivamente `customerSummary` y `customerRecommendations`, textos explícitamente públicos, con auditoría e idempotencia en la transacción RPC existente. Administradores, encargados y técnicos pueden actualizar el informe incluso después de entregar; caja y clientes no pueden hacerlo. Las órdenes canceladas lo rechazan. No permite modificar importes ni estado. La escritura genérica protege esos campos. La proyección del cliente conserva el informe público y sigue ocultando notas, recomendaciones internas, fotos, eventos y costos. Sin nuevas colecciones, reglas ni índices. El detalle imprimible se monta fuera del contenedor oculto al imprimir.

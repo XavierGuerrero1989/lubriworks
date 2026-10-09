@@ -320,8 +320,10 @@ export const guides: HelpGuide[] = [
       "historial servicio anterior trabajo cambio aceite registro mantenimiento",
     steps: [
       "Abrí Historial de servicios.",
-      "Revisá los servicios registrados por tu lubricentro.",
-      "Consultá vehículo, fecha y los detalles disponibles de cada orden.",
+      "Filtrá por vehículo, estado o período. La vista inicial muestra servicios finalizados.",
+      "En Ver detalle consultá kilometraje, insumos, mano de obra, adicionales autorizados, controles e informe del lubricentro para el cliente.",
+      "Consultá el saldo actual y abrí el comprobante si existe. Podés imprimir o guardar como PDF el detalle y el comprobante.",
+      "Próximo cuidado muestra la indicación histórica de esa visita. Ver mantenimientos vigentes abre tus avisos actuales.",
     ],
     destination: "history",
   },

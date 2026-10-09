@@ -388,7 +388,10 @@ describe("real API + Auth / Firestore emulators", () => {
   it("returns real tenant metrics and grants no operational membership", async () => {
     const result = await call(platformToken, "platform.overview");
     expect(result.status).toBe(200);
-    expect(result.data.totalTenants).toBe(2);
+    expect(result.data.totalTenants).toBe(result.data.tenants.length);
+    expect(result.data.tenants.map((t: any) => t.id)).toEqual(
+      expect.arrayContaining(["alpha", "beta"]),
+    );
     expect(
       result.data.tenants.find((t: any) => t.id === "alpha").vehicles,
     ).toBe(demoState().vehicles.length);
@@ -2661,5 +2664,78 @@ it("lets customers reschedule and cancel only owned unreceived future appointmen
     expect((await ref.get()).data()?.status).toBe("cancelled");
   } finally {
     await ref.delete();
+  }
+});
+
+it("publishes a customer service report through authenticated RPC while keeping internal notes private", async () => {
+  const { db } = admin(),
+    ref = db.doc("tenants/alpha/orders/ot1001"),
+    original = (await ref.get()).data()!;
+  try {
+    await ref.set({
+      ...original,
+      notes: "Nota interna confidencial",
+      recommendations: "Recomendación interna confidencial",
+      deliveredAt: new Date().toISOString(),
+      workStatus: "delivered",
+      status: "paid",
+    });
+    const payload = {
+      action: "order.customerReport",
+      id: "ot1001",
+      data: {
+        customerSummary: "Cambio de aceite y filtro realizado",
+        customerRecommendations: "Revisar niveles en el próximo control",
+        status: "received",
+        labor: 0,
+      },
+    };
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          payload,
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (await call(ownerToken, "command", payload, "beta", crypto.randomUUID()))
+        .status,
+    ).toBe(400);
+    const op = crypto.randomUUID(),
+      result = await call(ownerToken, "command", payload, "alpha", op);
+    expect(result.status, JSON.stringify(result.data)).toBe(200);
+    expect(
+      (await call(ownerToken, "command", payload, "alpha", op)).data.replayed,
+    ).toBe(true);
+    const o = (await ref.get()).data()!;
+    expect(o).toMatchObject({
+      workStatus: "delivered",
+      status: "paid",
+      labor: original.labor,
+      customerSummary: payload.data.customerSummary,
+      notes: "Nota interna confidencial",
+    });
+    const response = await call(clientToken, "state.page", {
+      collection: "orders",
+    });
+    expect(response.status).toBe(200);
+    const publicOrder = response.data.state.orders.find(
+      (o: any) => o.id === "ot1001",
+    );
+    expect(publicOrder.customerSummary).toBe(payload.data.customerSummary);
+    expect(publicOrder.customerRecommendations).toBe(
+      payload.data.customerRecommendations,
+    );
+    expect(publicOrder.notes).toBe("");
+    expect(publicOrder.recommendations).toBe("");
+    expect(publicOrder.photos).toEqual([]);
+    expect(publicOrder.events).toEqual([]);
+    expect(publicOrder.items.every((i: any) => i.cost === 0)).toBe(true);
+  } finally {
+    await ref.set(original);
   }
 });

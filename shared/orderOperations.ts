@@ -233,6 +233,30 @@ export function orderOperations(
       throw error;
     }
   };
+  if (cmd.action === "order.customerReport") {
+    need(
+      member.role !== "cashier",
+      "Tu rol no permite editar el informe técnico para el cliente.",
+    );
+    need(o.workStatus !== "cancelled", "La orden está cancelada.");
+    const data = z
+      .object({
+        customerSummary: z.string().trim().max(1000),
+        customerRecommendations: z.string().trim().max(1000),
+      })
+      .parse(cmd.data);
+    Object.assign(o, data);
+    orderEvent(
+      o,
+      id,
+      "Informe para cliente actualizado",
+      member.uid,
+      now,
+      "",
+      member.name,
+    );
+    return true;
+  }
   need(
     !["delivered", "cancelled"].includes(workStage(o)),
     "La orden está cerrada.",

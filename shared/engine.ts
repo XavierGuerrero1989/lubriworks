@@ -562,6 +562,8 @@ export function execute(
         "consumptionConfirmed",
         "consumptionNote",
         "recommendations",
+        "customerSummary",
+        "customerRecommendations",
         "photos",
         "events",
         "cancelledAt",

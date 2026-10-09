@@ -336,6 +336,8 @@ export const schemas = {
     consumptionConfirmed: z.boolean().optional(),
     consumptionNote: text.optional(),
     recommendations: text.optional(),
+    customerSummary: text.optional(),
+    customerRecommendations: text.optional(),
     photos: z.array(orderPhotoSchema).optional(),
     events: z
       .array(

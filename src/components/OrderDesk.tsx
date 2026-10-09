@@ -329,6 +329,33 @@ export function OrderDesk({
           },
         }),
     });
+  const customerReport = () =>
+    setDialog({
+      title: "Informe para el cliente",
+      description:
+        "Estos textos se muestran en su historial de servicios. Las notas y recomendaciones internas siguen siendo privadas.",
+      fields: [
+        field(
+          "customerSummary",
+          "Resumen del trabajo para el cliente",
+          "textarea",
+          { value: o!.customerSummary ?? "", required: false, maxLength: 1000 },
+        ),
+        field(
+          "customerRecommendations",
+          "Recomendaciones para el cliente",
+          "textarea",
+          {
+            value: o!.customerRecommendations ?? "",
+            required: false,
+            maxLength: 1000,
+            hint: "Indicá cuidados o trabajos recomendados. Los vencimientos se gestionan con los mantenimientos de la orden.",
+          },
+        ),
+      ],
+      submit: async (data) =>
+        run({ action: "order.customerReport", id: o!.id, data }),
+    });
   const addition = () =>
     setDialog({
       title: "Proponer trabajo adicional",
@@ -777,11 +804,22 @@ export function OrderDesk({
                 <Section
                   title="Trabajo y consumos reales"
                   action={
-                    editable ? (
-                      <button className="text-button" onClick={update}>
-                        Editar ficha
-                      </button>
-                    ) : undefined
+                    <div className="row-actions">
+                      {editable && (
+                        <button className="text-button" onClick={update}>
+                          Editar ficha
+                        </button>
+                      )}
+                      {o.workStatus !== "cancelled" &&
+                        access.member.role !== "cashier" && (
+                          <button
+                            className="text-button"
+                            onClick={customerReport}
+                          >
+                            Informe para cliente
+                          </button>
+                        )}
+                    </div>
                   }
                 >
                   <div className="order-panel-content">
@@ -824,6 +862,21 @@ export function OrderDesk({
                       Controles:{" "}
                       {o.checklist.join(" · ") || "Sin controles registrados"}
                     </p>
+                    {(o.customerSummary || o.customerRecommendations) && (
+                      <div>
+                        <strong>Informe visible para el cliente</strong>
+                        {o.customerSummary && (
+                          <p style={{ whiteSpace: "pre-wrap" }}>
+                            {o.customerSummary}
+                          </p>
+                        )}
+                        {o.customerRecommendations && (
+                          <p style={{ whiteSpace: "pre-wrap" }}>
+                            {o.customerRecommendations}
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <p>Notas internas: {o.notes || "Sin notas"}</p>
                     <p>
                       Recomendaciones internas del trabajo:{" "}

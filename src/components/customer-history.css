@@ -1,0 +1,126 @@
+.history-filters {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.history-filters label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+.history-filters input,
+.history-filters select {
+  padding: 11px;
+  border: 1px solid #dbe4e8;
+  border-radius: 10px;
+  background: white;
+  font: inherit;
+  color: inherit;
+  max-width: 100%;
+}
+.history-filters .search-box {
+  flex: 1 1 260px;
+}
+.history-count {
+  color: #64777e;
+}
+.history-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+  gap: 20px;
+}
+.history-card {
+  padding: 24px;
+  background: white;
+  border: 1px solid #dbe4e8;
+  border-radius: 18px;
+  overflow-wrap: anywhere;
+}
+.history-card-heading,
+.history-actions,
+.history-amounts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.history-card-heading {
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.history-card h2 {
+  font-size: 23px;
+}
+.history-card > span {
+  color: #64777e;
+}
+.history-amounts {
+  justify-content: space-between;
+  margin: 20px 0;
+}
+.history-amounts > div {
+  display: grid;
+  gap: 6px;
+}
+.history-actions {
+  margin-top: 18px;
+}
+.history-public-note {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.customer-service-report {
+  width: min(860px, calc(100vw - 24px));
+}
+.customer-service-report h3 {
+  margin: 26px 0 12px;
+}
+.customer-service-report li {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+.customer-service-report p {
+  line-height: 1.6;
+}
+.client-service-history [role="alert"] {
+  color: #a52a24;
+}
+@media (max-width: 600px) {
+  .history-filters > * {
+    width: 100%;
+  }
+  .history-filters input,
+  .history-filters select {
+    width: 100%;
+  }
+  .history-card {
+    padding: 20px;
+  }
+  .history-actions .button {
+    flex: 1 1 130px;
+  }
+  .customer-service-report .receipt-body {
+    padding: 18px;
+  }
+  .customer-service-report h2 {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
+  .customer-service-report .receipt-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media print {
+  .customer-service-report {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+  }
+  .customer-service-report .table-scroll {
+    overflow: visible;
+  }
+}

@@ -1,3 +1,4 @@
+import { CustomerHistory } from "./CustomerHistory";
 import { localDay } from "../../shared/dashboard";
 import { CustomerAppointments } from "./CustomerAppointments";
 import { CustomerHome } from "./CustomerHome";
@@ -1136,6 +1137,19 @@ export function Workspace({
         onReceipt={(o) => setReceipt(s.sales.find((v) => v.orderId === o.id)!)}
         onRefresh={onRefresh}
         demo={demo}
+      />
+    );
+  else if (customer && tab === "history")
+    content = (
+      <CustomerHistory
+        state={s}
+        access={access}
+        search={search}
+        onSearch={setSearch}
+        onRefresh={onRefresh}
+        onReceipt={setReceipt}
+        onVisit={() => go("vehicles")}
+        onMaintenance={() => go("reminders")}
       />
     );
   else if (tab === "orders" || tab === "history")

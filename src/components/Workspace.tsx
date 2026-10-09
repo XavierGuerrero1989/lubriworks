@@ -1,3 +1,5 @@
+import { OrderDesk } from "./OrderDesk";
+import { orderTotal, workStage } from "../../shared/orders";
 import { Agenda } from "./Agenda";
 import { availability, availableTimes } from "../../shared/agenda";
 import { OperationalDashboard } from "./OperationalDashboard";
@@ -125,6 +127,7 @@ export function Workspace({
     manager = canManage(access.member.role),
     charge = canCharge(access.member.role);
   const [receipt, setReceipt] = useState<Sale | null>(null);
+  const [focusedOrder, setFocusedOrder] = useState("");
   const [tab, setTab] = useState(
       customer
         ? new URLSearchParams(location.search).get("portal") === "notifications"
@@ -202,11 +205,95 @@ export function Workspace({
     extra: Partial<Field> = {},
   ): Field => ({ key, label, type, ...extra });
   const defaultBranch = branch === "all" ? s.branches[0]?.id || "" : branch;
+  function newOrder(initial: Record<string, any> = {}) {
+    setDialog({
+      title: "Nueva orden y presupuesto",
+      description:
+        "Seleccioná uno o varios servicios. La orden queda pendiente de autorización antes de iniciar el trabajo.",
+      fields: [
+        field("vehicleId", "Vehículo", "text", {
+          options: s.vehicles.map((v) => ({
+            value: v.id,
+            label: `${v.plate} · ${clientName(v.customerId)}`,
+          })),
+          value: initial.vehicleId,
+        }),
+        field("branchId", "Sucursal", "text", {
+          options: opts("branches"),
+          value: initial.branchId || defaultBranch,
+        }),
+        field("serviceIds", "Servicios incluidos", "choices", {
+          options: s.services.map((v) => ({ value: v.id, label: v.name })),
+          value: [],
+          hint: "Elegí al menos un servicio; se sumarán mano de obra e insumos.",
+        }),
+        field("extraItems", "Otros insumos del presupuesto", "lines", {
+          options: s.products.map((p) => ({
+            value: p.id,
+            label: `${p.name} · ${branchName(p.branchId)}`,
+          })),
+          value: [],
+          required: false,
+        }),
+        field("odometer", "Kilometraje al ingresar", "number", {
+          min: 0,
+          step: "1",
+          value: initial.odometer,
+        }),
+        field("technician", "Técnico responsable", "text", {
+          value: initial.technician || "",
+          required: false,
+        }),
+        field("checklist", "Controles de recepción", "textarea", {
+          required: false,
+          hint: "Separados por coma.",
+        }),
+        field("notes", "Observaciones internas", "textarea", {
+          value: initial.notes || "",
+          required: false,
+          maxLength: 1000,
+        }),
+      ],
+      preview: (values) => {
+        const v = s.vehicles.find((r) => r.id === values.vehicleId);
+        return v ? (
+          <p className="agenda-availability">
+            Última lectura registrada: {number(v.odometer)} km (
+            {fmtDate(v.readingDate)}). Confirmá el kilometraje del tablero al
+            ingresar.
+          </p>
+        ) : null;
+      },
+      submit: async (data) => {
+        await execute({
+          action: "order.create",
+          ...data,
+          checklist: String(data.checklist)
+            .split(",")
+            .map((v) => v.trim())
+            .filter(Boolean),
+          ...(initial.appointmentId
+            ? { appointmentId: initial.appointmentId }
+            : {}),
+        });
+        setFocusedOrder("");
+        go("orders");
+      },
+    });
+  }
   function edit(
     collection: Collection,
     record?: any,
     initial: Record<string, any> = {},
   ) {
+    if (String(collection) === "orders") {
+      if (!record) newOrder(initial);
+      else {
+        setFocusedOrder(record.id);
+        go("orders");
+      }
+      return;
+    }
     const d = { ...record, ...initial };
     let fields: Field[] = [];
     if (collection === "branches")
@@ -675,12 +762,7 @@ export function Workspace({
                 <td>
                   <Badge value={o.status} />
                 </td>
-                <td className="numeric">
-                  {money(
-                    o.labor +
-                      o.items.reduce((n, i) => n + i.price * i.quantity, 0),
-                  )}
-                </td>
+                <td className="numeric">{money(orderTotal(o))}</td>
                 <td>
                   <div className="row-actions">
                     {!customer &&
@@ -779,8 +861,9 @@ export function Workspace({
           <Stat
             label="Vehículos en atención"
             value={
-              orders.filter((o) => ["received", "working"].includes(o.status))
-                .length
+              orders.filter((o) =>
+                ["received", "working", "waiting"].includes(workStage(o)),
+              ).length
             }
             detail={`${orders.filter((o) => !o.deliveredAt && (o.status === "ready" || (o.status === "paid" && (o.receivedAt || o.finishedAt || o.date === today())))).length} listos o pendientes de entrega`}
             icon={<Car size={20} />}
@@ -814,13 +897,18 @@ export function Workspace({
               "Se registrará la hora de inicio del trabajo.",
             )
           }
-          onFinish={(id) =>
-            action(
-              "Finalizar servicio",
-              { action: "finishOrder", id },
-              "Se descontarán los insumos y se calculará el próximo mantenimiento.",
-            )
-          }
+          onFinish={(id) => {
+            const o = s.orders.find((v) => v.id === id);
+            if (!o?.consumptionConfirmed) {
+              setFocusedOrder(id);
+              go("orders");
+            } else
+              action(
+                "Finalizar servicio",
+                { action: "finishOrder", id },
+                "Se descontarán los consumos reales confirmados y se generarán los próximos mantenimientos.",
+              );
+          }}
           onCharge={chargeOrder}
           onDeliver={(id) =>
             action(
@@ -830,8 +918,8 @@ export function Workspace({
             )
           }
           onView={(order) => {
+            setFocusedOrder(order.id);
             go("orders");
-            setSearch(plate(order.vehicleId));
           }}
         />
         <div className="dashboard-bottom">
@@ -990,6 +1078,22 @@ export function Workspace({
           </div>
         )}
       </>
+    );
+  else if (tab === "orders" && !customer)
+    content = (
+      <OrderDesk
+        key={access.tenant.id}
+        state={s}
+        access={access}
+        branch={branch}
+        focusId={focusedOrder}
+        run={execute}
+        onNew={() => newOrder()}
+        onCharge={chargeOrder}
+        onReceipt={(o) => setReceipt(s.sales.find((v) => v.orderId === o.id)!)}
+        onRefresh={onRefresh}
+        demo={demo}
+      />
     );
   else if (tab === "orders" || tab === "history")
     content = (

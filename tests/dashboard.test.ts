@@ -11,7 +11,7 @@ const owner = demoAccess.member;
 const now = today() + "T15:00:00.000Z";
 function receive() {
   const state = demoState(),
-    appointment = state.appointments[0],
+    appointment = state.appointments[1],
     vehicle = state.vehicles.find((v) => v.id === appointment.vehicleId)!;
   return {
     state,
@@ -81,7 +81,7 @@ describe("operational dashboard", () => {
         "duplicate",
         now,
       ),
-    ).toThrow("ya fue recibido");
+    ).toThrow(/ya fue recibido|orden abierta/);
     expect(() =>
       execute(
         saved,
@@ -91,16 +91,41 @@ describe("operational dashboard", () => {
         now,
       ),
     ).toThrow("Cobrá");
-    const started = execute(
+    const authorized = execute(
       saved,
+      owner,
+      {
+        action: "order.decision",
+        id: "visit",
+        decision: "approved",
+        method: "presencial",
+        note: "Cliente autorizó el presupuesto",
+      },
+      "approve",
+      now,
+    );
+    const started = execute(
+      authorized,
       owner,
       { action: "startOrder", id: "visit" },
       "start",
       now,
     );
     expect(started.orders.find((o) => o.id === "visit")?.startedAt).toBe(now);
-    const finished = execute(
+    const consumed = execute(
       started,
+      owner,
+      {
+        action: "order.consumption",
+        id: "visit",
+        items: started.orders.find((o) => o.id === "visit")!.items,
+        note: "Cantidades verificadas",
+      },
+      "consumption",
+      now,
+    );
+    const finished = execute(
+      consumed,
       owner,
       { action: "finishOrder", id: "visit" },
       "finish",
@@ -155,7 +180,7 @@ describe("operational dashboard", () => {
         {
           action: "save",
           collection: "orders",
-          data: { ...data, vehicleId: "v2", customerId: "c2" },
+          data: { ...data, branchId: "north" },
         },
         "wrong",
         now,
@@ -180,7 +205,7 @@ describe("operational dashboard", () => {
     const o = saved.orders.find((o) => o.id === "visit")!;
     expect(o.deliveredAt).toBeUndefined();
     expect(o.startedAt).toBeUndefined();
-    expect(o.approval).toBeUndefined();
+    expect(o.approval).toBe("pending");
     expect(() =>
       execute(
         saved,

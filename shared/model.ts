@@ -48,6 +48,20 @@ export const date = z
     "Fecha inválida",
   );
 const optionalDate = z.union([date, z.literal("")]).default("");
+export const orderItemSchema = z.object({
+  productId: key,
+  name: z.string().max(120).default(""),
+  quantity: z.number().positive().max(1000),
+  price: money,
+  cost: money,
+});
+export const orderPhotoSchema = z.object({
+  id: key,
+  caption: z.string().max(300),
+  phase: z.enum(["arrival", "work", "delivery"]),
+  at: z.string().datetime(),
+  by: key,
+});
 export const schemas = {
   branches: z.object({
     name,
@@ -182,17 +196,83 @@ export const schemas = {
     deliveredAt: z.string().datetime().optional(),
     deliveredBy: key.optional(),
     approval: z.enum(["pending", "approved", "rejected"]).optional(),
-    items: z
+    workStatus: z
+      .enum([
+        "received",
+        "working",
+        "waiting",
+        "ready",
+        "delivered",
+        "cancelled",
+      ])
+      .optional(),
+    paymentStatus: z.enum(["unpaid", "paid"]).optional(),
+    quoteRevision: z.number().int().min(1).optional(),
+    approvalHistory: z
       .array(
         z.object({
-          productId: key,
-          name: z.string().max(120).default(""),
-          quantity: z.number().positive().max(1000),
-          price: money,
-          cost: money,
+          revision: z.number().int(),
+          decision: z.enum(["approved", "rejected"]),
+          total: money,
+          method: z.enum(["presencial", "telefono", "mensaje"]),
+          note: text,
+          at: z.string().datetime(),
+          by: key,
         }),
       )
-      .max(30),
+      .optional(),
+    serviceSnapshots: z
+      .array(
+        z.object({
+          serviceId: key,
+          name,
+          labor: money,
+          intervalKm: z.number().int().min(0).max(100000),
+          intervalMonths: z.number().int().min(0).max(120),
+        }),
+      )
+      .optional(),
+    additions: z
+      .array(
+        z.object({
+          id: key,
+          title: name,
+          items: z.array(orderItemSchema),
+          labor: money,
+          status: z.enum(["pending", "approved", "rejected"]),
+          createdAt: z.string().datetime(),
+          decidedAt: z.string().datetime().optional(),
+          decidedBy: key.optional(),
+          method: z.enum(["presencial", "telefono", "mensaje"]).optional(),
+          note: text.optional(),
+        }),
+      )
+      .optional(),
+    extraItems: z
+      .array(
+        z.object({ productId: key, quantity: z.number().positive().max(1000) }),
+      )
+      .optional(),
+    actualItems: z.array(orderItemSchema).optional(),
+    consumptionConfirmed: z.boolean().optional(),
+    consumptionNote: text.optional(),
+    recommendations: text.optional(),
+    photos: z.array(orderPhotoSchema).optional(),
+    events: z
+      .array(
+        z.object({
+          id: key,
+          title: name,
+          note: text,
+          at: z.string().datetime(),
+          by: key,
+          actorName: z.string().max(120).optional(),
+        }),
+      )
+      .optional(),
+    cancelledAt: z.string().datetime().optional(),
+    cancelReason: text.optional(),
+    items: z.array(orderItemSchema),
     labor: money,
     intervalKm: z.number().int().min(0).max(100000),
     intervalMonths: z.number().int().min(0).max(120),
@@ -380,6 +460,17 @@ export function projectState(state: State, member: Member): State {
     out.orders = out.orders.map((o) => ({
       ...o,
       notes: "",
+      recommendations: "",
+      photos: [],
+      events: [],
+      approvalHistory: [],
+      consumptionNote: "",
+      additions: o.additions?.map((a) => ({
+        ...a,
+        note: "",
+        items: a.items.map((i) => ({ ...i, cost: 0 })),
+      })),
+      actualItems: o.actualItems?.map((i) => ({ ...i, cost: 0 })),
       items: o.items.map((i) => ({ ...i, cost: 0 })),
     }));
     out.sales = out.sales.map((s) => ({ ...s, cost: 0 }));
@@ -388,6 +479,11 @@ export function projectState(state: State, member: Member): State {
     out.products = out.products.map((p) => ({ ...p, cost: 0 }));
     out.orders = out.orders.map((o) => ({
       ...o,
+      additions: o.additions?.map((a) => ({
+        ...a,
+        items: a.items.map((i) => ({ ...i, cost: 0 })),
+      })),
+      actualItems: o.actualItems?.map((i) => ({ ...i, cost: 0 })),
       items: o.items.map((i) => ({ ...i, cost: 0 })),
     }));
     out.sales = out.sales.map((v) => ({ ...v, cost: 0 }));

@@ -1,3 +1,4 @@
+import { orderTotal } from "../../shared/orders";
 import { useEffect, useState } from "react";
 import {
   CalendarDays,
@@ -304,13 +305,7 @@ export function OperationalDashboard({
                           </span>
                         </div>
                         <strong className="operation-total">
-                          {money(
-                            o.labor +
-                              o.items.reduce(
-                                (n, i) => n + i.price * i.quantity,
-                                0,
-                              ),
-                          )}
+                          {money(orderTotal(o))}
                         </strong>
                         <div className="operation-actions">
                           {stage === "received" && technician && (
@@ -326,7 +321,9 @@ export function OperationalDashboard({
                               className="button primary small"
                               onClick={() => onFinish(o.id)}
                             >
-                              Finalizar
+                              {o.consumptionConfirmed
+                                ? "Finalizar"
+                                : "Revisar consumos"}
                             </button>
                           )}
                           {stage === "ready" && charge && (

@@ -24,6 +24,13 @@ export const labels: Record<string, string> = {
   requested: "Solicitado",
   confirmed: "Confirmado",
   completed: "Completado",
+  waiting: "Esperando autorización",
+  approved: "Autorizado",
+  rejected: "Rechazado",
+  pending: "Pendiente de autorización",
+  delivered: "Entregado",
+  unpaid: "Sin cobrar",
+  legacy: "Orden anterior sin constancia de autorización",
   cancelled: "Cancelado",
   no_show: "Ausente",
   draft: "Pendiente",
@@ -113,6 +120,7 @@ export type Field = {
   label: string;
   type?: string;
   required?: boolean;
+  omitWhenEmpty?: boolean;
   options?: { value: string; label: string }[];
   value?: unknown;
   min?: number;
@@ -202,13 +210,17 @@ export function FormDialog({
             const data: Record<string, any> = {};
             for (const f of dialog.fields)
               data[f.key] =
-                f.type === "lines"
-                  ? JSON.parse(String(fd.get(f.key) || "[]"))
-                  : f.type === "number"
-                    ? Number(fd.get(f.key))
-                    : f.type === "checkbox"
-                      ? fd.has(f.key)
-                      : String(fd.get(f.key) || "");
+                f.type === "choices"
+                  ? fd.getAll(f.key).map(String)
+                  : f.type === "lines"
+                    ? JSON.parse(String(fd.get(f.key) || "[]"))
+                    : f.type === "number"
+                      ? f.omitWhenEmpty && !fd.get(f.key)
+                        ? undefined
+                        : Number(fd.get(f.key))
+                      : f.type === "checkbox"
+                        ? fd.has(f.key)
+                        : String(fd.get(f.key) || "");
             try {
               await dialog.submit(data);
               onClose();
@@ -229,7 +241,25 @@ export function FormDialog({
                     : fieldValues[f.showWhen.key] === f.showWhen.value),
               )
               .map((f, i) =>
-                f.type === "lines" ? (
+                f.type === "choices" ? (
+                  <fieldset className="form-choices full" key={f.key}>
+                    <legend>{f.label}</legend>
+                    {f.options?.map((o) => (
+                      <label key={o.value}>
+                        <input
+                          type="checkbox"
+                          name={f.key}
+                          value={o.value}
+                          defaultChecked={
+                            Array.isArray(f.value) && f.value.includes(o.value)
+                          }
+                        />{" "}
+                        {o.label}
+                      </label>
+                    ))}
+                    {f.hint && <small>{f.hint}</small>}
+                  </fieldset>
+                ) : f.type === "lines" ? (
                   <div key={f.key} className="full">
                     <p className="field-label">{f.label}</p>
                     <Lines field={f} />

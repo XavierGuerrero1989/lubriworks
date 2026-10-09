@@ -1,3 +1,4 @@
+import { workStage } from "./orders.js";
 import { type Entity, type State } from "./model.js";
 export const dashboardStages = [
   "received",
@@ -9,18 +10,10 @@ export const dashboardStages = [
 export type DashboardStage = (typeof dashboardStages)[number];
 export type DashboardOrder = Entity<"orders">;
 export function dashboardStage(order: DashboardOrder): DashboardStage | null {
-  if (order.deliveredAt) return null;
-  if (
-    ["received", "working"].includes(order.status) &&
-    order.approval === "pending"
-  )
-    return "waiting";
-  if (order.status === "paid") return "delivery";
-  return order.status === "received" ||
-    order.status === "working" ||
-    order.status === "ready"
-    ? order.status
-    : null;
+  const stage = workStage(order);
+  if (stage === "delivered" || stage === "cancelled") return null;
+  if (stage === "ready" && order.status === "paid") return "delivery";
+  return stage;
 }
 export function localDay(now: string) {
   return new Intl.DateTimeFormat("en-CA", {

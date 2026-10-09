@@ -1,3 +1,4 @@
+import { consumedItems, billingItems } from "../shared/orders.js";
 import type { Firestore, Transaction, Query } from "firebase-admin/firestore";
 import {
   collections,
@@ -147,6 +148,10 @@ export async function loadCommandState(
     if (c === "appointments")
       await query(c, col(c).where("date", "==", data.date));
     if (c === "orders") {
+      await query(
+        "orders",
+        col("orders").where("vehicleId", "==", data.vehicleId),
+      );
       const service = await doc("services", data.serviceId);
       await products(service?.items);
       if (data.appointmentId) await doc("appointments", data.appointmentId);
@@ -155,7 +160,9 @@ export async function loadCommandState(
   } else if (cmd.action === "finishOrder" || cmd.action === "chargeOrder") {
     const o = await doc("orders", cmd.id);
     if (o) {
-      await products(o.items);
+      await products(
+        cmd.action === "finishOrder" ? consumedItems(o) : billingItems(o),
+      );
       if (cmd.action === "finishOrder") {
         await doc("vehicles", o.vehicleId);
         await doc("services", o.serviceId);
@@ -171,6 +178,29 @@ export async function loadCommandState(
     const order = await doc("orders", cmd.id);
     if (cmd.action === "deliverOrder" && order?.appointmentId)
       await doc("appointments", order.appointmentId);
+  } else if (cmd.action.startsWith("order.")) {
+    const o =
+      cmd.action === "order.create" ? undefined : await doc("orders", cmd.id);
+    if (cmd.action === "order.create") {
+      await doc("vehicles", cmd.vehicleId);
+      await doc("branches", cmd.branchId);
+      await query(
+        "orders",
+        col("orders").where("vehicleId", "==", cmd.vehicleId),
+      );
+      if (cmd.appointmentId) await doc("appointments", cmd.appointmentId);
+    }
+    if (cmd.action === "order.create" || cmd.action === "order.quote") {
+      for (const sid of (cmd.serviceIds as unknown[]) || []) {
+        const service = await doc("services", sid);
+        await products(service?.items);
+      }
+      await products(cmd.extraItems as any[]);
+    }
+    if (cmd.action === "order.addition" || cmd.action === "order.consumption")
+      await products(cmd.items as any[]);
+    if (cmd.action === "order.cancel" && o?.appointmentId)
+      await doc("appointments", o.appointmentId);
   } else if (cmd.action === "sale") {
     await doc("branches", cmd.branchId);
     await products(cmd.items as any[]);

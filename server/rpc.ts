@@ -1,3 +1,4 @@
+import { orderPhotoRpc } from "./orderPhotos.js";
 import { createCustomerAccount } from "./customerAccounts.js";
 import { notificationRpc } from "./notifications.js";
 import { overview, team, saveMember } from "./platform.js";
@@ -221,6 +222,12 @@ export default async function handler(
         res,
         200,
         await notificationRpc(db, tenantId, uid, action, payload, operationId),
+      );
+    if (action.startsWith("order.photo."))
+      return respond(
+        res,
+        200,
+        await orderPhotoRpc(db, tenantId, uid, action, payload, operationId),
       );
     const tref = db.doc(`tenants/${tenantId}`),
       mref = db.doc(`tenants/${tenantId}/members/${uid}`);

@@ -1,4 +1,13 @@
 import { z } from "zod";
+import { orderOperations } from "./orderOperations.js";
+import {
+  approvedLabor,
+  billingItems,
+  consumedItems,
+  hasPendingAddition,
+  orderEvent,
+  workStage,
+} from "./orders.js";
 import { availability, agendaActive, duration } from "./agenda.js";
 import { localDay } from "./dashboard.js";
 import {
@@ -101,6 +110,7 @@ export function execute(
       });
     }
   };
+  if (orderOperations(s, member, cmd, id, now)) return s;
   if (cmd.action === "save") {
     const collection = z
       .enum(Object.keys(schemas) as [Collection, ...Collection[]])
@@ -319,13 +329,59 @@ export function execute(
         "deliveredBy",
         "appointmentId",
         "approval",
+        "workStatus",
+        "paymentStatus",
+        "quoteRevision",
+        "approvalHistory",
+        "serviceSnapshots",
+        "extraItems",
+        "additions",
+        "actualItems",
+        "consumptionConfirmed",
+        "consumptionNote",
+        "recommendations",
+        "photos",
+        "events",
+        "cancelledAt",
+        "cancelReason",
       ]) {
         if (existing && (existing as any)[field] !== undefined)
           data[field] = (existing as any)[field];
         else if (field !== "appointmentId") delete data[field];
       }
       if (!existing) data.receivedAt = now;
-      if (data.status === "working") data.startedAt ??= now;
+      if (existing) {
+        requireThat(
+          data.vehicleId === (existing as any).vehicleId &&
+            data.branchId === (existing as any).branchId &&
+            data.serviceId === (existing as any).serviceId &&
+            data.status === (existing as any).status,
+          "La identidad, presupuesto y estado se gestionan desde la ficha de orden.",
+        );
+        requireThat(
+          workStage(existing as any) !== "cancelled",
+          "La orden está cancelada.",
+        );
+      } else {
+        requireThat(
+          data.status === "received",
+          "Creá la orden recibida y registrá la autorización antes de comenzar.",
+        );
+        requireThat(
+          !s.orders.some(
+            (o) =>
+              o.vehicleId === data.vehicleId &&
+              (o.workStatus || o.status !== "paid") &&
+              !["cancelled", "delivered"].includes(workStage(o)),
+          ),
+          "El vehículo ya tiene una orden abierta.",
+        );
+        data.approval = "pending";
+        data.workStatus = "received";
+        data.paymentStatus = "unpaid";
+        data.quoteRevision = 1;
+        data.consumptionConfirmed = false;
+      }
       if (data.appointmentId) {
         const appointment = find(s.appointments, data.appointmentId, "Turno");
         requireThat(
@@ -356,19 +412,49 @@ export function execute(
         ["received", "working"].includes(data.status),
         "Usá Finalizar servicio para cerrar la orden.",
       );
-      const service = find(s.services, data.serviceId, "Servicio");
-      data.serviceName = service.name;
-      data.labor = service.labor;
-      data.intervalKm = service.intervalKm;
-      data.intervalMonths = service.intervalMonths;
-      data.items = service.items.map((i) => {
-        const p = find(s.products, i.productId, "Producto");
-        requireThat(
-          p.branchId === data.branchId,
-          "El combo tiene productos de otra sucursal.",
-        );
-        return { ...i, name: p.name, price: p.price, cost: p.cost };
-      });
+      if (existing) {
+        for (const field of [
+          "serviceName",
+          "labor",
+          "items",
+          "intervalKm",
+          "intervalMonths",
+        ])
+          data[field] = (existing as any)[field];
+      } else {
+        const service = find(s.services, data.serviceId, "Servicio");
+        data.serviceName = service.name;
+        data.labor = service.labor;
+        data.intervalKm = service.intervalKm;
+        data.intervalMonths = service.intervalMonths;
+        data.serviceSnapshots = [
+          {
+            serviceId: service.id,
+            name: service.name,
+            labor: service.labor,
+            intervalKm: service.intervalKm,
+            intervalMonths: service.intervalMonths,
+          },
+        ];
+        data.items = service.items.map((i) => {
+          const p = find(s.products, i.productId, "Producto");
+          requireThat(
+            p.branchId === data.branchId,
+            "El combo tiene productos de otra sucursal.",
+          );
+          return { ...i, name: p.name, price: p.price, cost: p.cost };
+        });
+        data.events = [
+          {
+            id,
+            title: "Recepción y presupuesto",
+            by: member.uid,
+            at: now,
+            note: "",
+            actorName: member.name,
+          },
+        ];
+      }
       requireThat(
         data.date <= today(),
         "La orden no puede tener fecha futura.",
@@ -402,15 +488,19 @@ export function execute(
     );
     const o = find(s.orders, cmd.id, "Orden");
     requireThat(
-      o.status === "received" && !o.deliveredAt,
+      o.status === "received" && !o.deliveredAt && workStage(o) !== "cancelled",
       "La orden no está pendiente de comenzar.",
     );
     requireThat(
-      o.approval !== "pending" && o.approval !== "rejected",
+      o.approval !== "pending" &&
+        o.approval !== "rejected" &&
+        !hasPendingAddition(o),
       "El presupuesto necesita aprobación antes de comenzar.",
     );
     o.status = "working";
     o.startedAt = now;
+    o.workStatus = "working";
+    orderEvent(o, id, "Trabajo iniciado", member.uid, now, "", member.name);
   } else if (cmd.action === "deliverOrder") {
     requireThat(cashier, "Tu rol no permite entregar vehículos.");
     const o = find(s.orders, cmd.id, "Orden");
@@ -421,6 +511,8 @@ export function execute(
     requireThat(!o.deliveredAt, "El vehículo ya fue entregado.");
     o.deliveredAt = now;
     o.deliveredBy = member.uid;
+    o.workStatus = "delivered";
+    orderEvent(o, id, "Vehículo entregado", member.uid, now, "", member.name);
     if (o.appointmentId)
       find(s.appointments, o.appointmentId, "Turno").status = "completed";
   } else if (cmd.action === "finishOrder") {
@@ -433,37 +525,68 @@ export function execute(
       ["received", "working"].includes(o.status),
       "La orden ya fue finalizada.",
     );
+    requireThat(
+      workStage(o) !== "cancelled" &&
+        o.approval !== "pending" &&
+        o.approval !== "rejected" &&
+        !hasPendingAddition(o),
+      "Resolvé todas las autorizaciones antes de finalizar.",
+    );
+    requireThat(
+      !o.workStatus || o.consumptionConfirmed,
+      "Confirmá los consumos reales antes de finalizar.",
+    );
+    requireThat(
+      !o.quoteRevision || !!o.startedAt,
+      "Comenzá la atención antes de finalizar.",
+    );
     const v = find(s.vehicles, o.vehicleId);
     reading(v, o.odometer, o.date);
-    useStock(o.items, o.branchId, -1, `Servicio ${o.id}`);
+    useStock(consumedItems(o), o.branchId, -1, `Servicio ${o.id}`);
     o.status = "ready";
     o.finishedAt = now;
+    o.workStatus = "ready";
+    o.paymentStatus = "unpaid";
+    orderEvent(o, id, "Servicio finalizado", member.uid, now, "", member.name);
+    const snapshots = o.serviceSnapshots ?? [
+      {
+        serviceId: o.serviceId,
+        name: o.serviceName || find(s.services, o.serviceId).name,
+        intervalKm: o.intervalKm,
+        intervalMonths: o.intervalMonths,
+      },
+    ];
     for (const r of s.reminders)
-      if (r.vehicleId === v.id && r.source === o.serviceId) r.status = "done";
-    if (o.intervalKm || o.intervalMonths) {
-      const d = new Date(o.date + "T12:00:00Z");
-      const day = d.getUTCDate();
-      d.setUTCDate(1);
-      d.setUTCMonth(d.getUTCMonth() + o.intervalMonths);
-      d.setUTCDate(
-        Math.min(
-          day,
-          new Date(
-            Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0),
-          ).getUTCDate(),
-        ),
-      );
-      s.reminders.push({
-        id,
-        vehicleId: v.id,
-        customerId: v.customerId,
-        title: find(s.services, o.serviceId).name,
-        dueDate: o.intervalMonths ? d.toISOString().slice(0, 10) : "",
-        dueKm: o.intervalKm ? o.odometer + o.intervalKm : null,
-        status: "active",
-        source: o.serviceId,
-      });
-    }
+      if (
+        r.vehicleId === v.id &&
+        snapshots.some((snapshot) => snapshot.serviceId === r.source)
+      )
+        r.status = "done";
+    for (const [index, snapshot] of snapshots.entries())
+      if (snapshot.intervalKm || snapshot.intervalMonths) {
+        const d = new Date(o.date + "T12:00:00Z");
+        const day = d.getUTCDate();
+        d.setUTCDate(1);
+        d.setUTCMonth(d.getUTCMonth() + snapshot.intervalMonths);
+        d.setUTCDate(
+          Math.min(
+            day,
+            new Date(
+              Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0),
+            ).getUTCDate(),
+          ),
+        );
+        s.reminders.push({
+          id: index ? `${id}-${index}` : id,
+          vehicleId: v.id,
+          customerId: v.customerId,
+          title: snapshot.name,
+          dueDate: snapshot.intervalMonths ? d.toISOString().slice(0, 10) : "",
+          dueKm: snapshot.intervalKm ? o.odometer + snapshot.intervalKm : null,
+          status: "active",
+          source: snapshot.serviceId,
+        });
+      }
   } else if (cmd.action === "chargeOrder" || cmd.action === "sale") {
     requireThat(cashier, "Tu rol no permite cobrar.");
     const method = z.enum(["cash", "transfer", "card"]).parse(cmd.method);
@@ -482,15 +605,24 @@ export function execute(
       branchId = o.branchId;
       customerId = o.customerId;
       orderId = o.id;
-      items = o.items.map((i) => ({
-        name: find(s.products, i.productId).name,
+      items = billingItems(o).map((i) => ({
+        name: i.name || find(s.products, i.productId).name,
         quantity: i.quantity,
         price: i.price,
       }));
-      items.push({ name: "Mano de obra", quantity: 1, price: o.labor });
+      items.push({
+        name: "Mano de obra",
+        quantity: 1,
+        price: approvedLabor(o),
+      });
       total = round(items.reduce((n, i) => n + i.quantity * i.price, 0));
-      cost = round(o.items.reduce((n, i) => n + i.quantity * i.cost, 0));
+      cost = round(
+        consumedItems(o).reduce((n, i) => n + i.quantity * i.cost, 0),
+      );
       o.status = "paid";
+      o.paymentStatus = "paid";
+      o.workStatus = "ready";
+      orderEvent(o, id, "Cobro registrado", member.uid, now, "", member.name);
     } else {
       branchId = key.parse(cmd.branchId);
       find(s.branches, branchId);

@@ -638,11 +638,14 @@ describe("real API + Auth / Firestore emulators", () => {
     const { db } = admin();
     const seed = demoState();
     const vehicle = (await db.doc("tenants/alpha/vehicles/v1").get()).data()!;
+    await db
+      .doc("tenants/alpha/vehicles/v-dashboard")
+      .set({ ...vehicle, id: "v-dashboard", plate: "DASH001" });
     const appointmentId = "dashboard-turn";
     await db.doc("tenants/alpha/appointments/" + appointmentId).set({
       ...seed.appointments[0],
       id: appointmentId,
-      vehicleId: "v1",
+      vehicleId: "v-dashboard",
       customerId: "c1",
       branchId: "main",
       status: "confirmed",
@@ -650,7 +653,7 @@ describe("real API + Auth / Firestore emulators", () => {
     const data = {
       ...seed.orders[0],
       status: "received",
-      vehicleId: "v1",
+      vehicleId: "v-dashboard",
       customerId: "c1",
       branchId: "main",
       odometer: vehicle.odometer,
@@ -701,6 +704,23 @@ describe("real API + Auth / Firestore emulators", () => {
         await call(
           ownerToken,
           "command",
+          {
+            action: "order.decision",
+            id,
+            decision: "approved",
+            method: "presencial",
+            note: "Cliente autoriza",
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
           { action: "startOrder", id },
           "alpha",
           crypto.randomUUID(),
@@ -721,6 +741,23 @@ describe("real API + Auth / Firestore emulators", () => {
         )
       ).status,
     ).toBe(400);
+    const visit = (await db.doc("tenants/alpha/orders/" + id).get()).data()!;
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "order.consumption",
+            id,
+            items: visit.items,
+            note: "Insumos comprobados",
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
     expect(
       (
         await call(
@@ -955,5 +992,294 @@ describe("real API + Auth / Firestore emulators", () => {
       (await db.doc("tenants/alpha/appointments/" + pastId).get()).data()
         ?.statusReason,
     ).toBe("No se presentó");
+  });
+  it("handles multi-service authorization, actual stock, separate payment and linked delivery through the real API", async () => {
+    const { db } = admin(),
+      seed = demoState();
+    await db.doc("tenants/alpha/vehicles/v-orders").set({
+      ...seed.vehicles[0],
+      id: "v-orders",
+      plate: "LW999ZZ",
+      odometer: 50000,
+      readingDate: new Date().toISOString().slice(0, 10),
+    });
+    for (const [id, unit, price, cost] of [
+      ["orders-oil", "litro", 100, 60],
+      ["orders-filter", "unidad", 200, 100],
+    ] as const)
+      await db.doc("tenants/alpha/products/" + id).set({
+        name: id,
+        sku: id,
+        unit,
+        price,
+        cost,
+        stock: 100,
+        minStock: 1,
+        branchId: "main",
+      });
+    for (const [id, productId, quantity] of [
+      ["orders-service", "orders-oil", 4],
+      ["orders-air", "orders-filter", 1],
+    ] as const)
+      await db.doc("tenants/alpha/services/" + id).set({
+        name: id,
+        labor: 1000,
+        intervalKm: 10000,
+        intervalMonths: 12,
+        items: [{ productId, quantity }],
+      });
+    await db.doc("tenants/alpha/appointments/a-orders").set({
+      ...seed.appointments[0],
+      id: "a-orders",
+      vehicleId: "v-orders",
+      customerId: "c1",
+      branchId: "main",
+      status: "confirmed",
+    });
+    const payload = {
+      action: "order.create",
+      vehicleId: "v-orders",
+      branchId: "main",
+      appointmentId: "a-orders",
+      serviceIds: ["orders-service", "orders-air"],
+      odometer: 50000,
+      technician: "Técnico demo",
+    };
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    const race = await Promise.all(
+      ids.map((id) => call(ownerToken, "command", payload, "alpha", id)),
+    );
+    expect(race.map((r) => r.status).sort()).toEqual([200, 400]);
+    const id = ids[race.findIndex((r) => r.status === 200)];
+    const command = (
+      p: Record<string, unknown>,
+      operation = crypto.randomUUID(),
+    ) => call(ownerToken, "command", { id, ...p }, "alpha", operation);
+    expect((await command({ action: "startOrder" })).status).toBe(400);
+    expect((await command({ action: "finishOrder" })).status).toBe(400);
+    expect(
+      (
+        await command({
+          action: "order.decision",
+          decision: "approved",
+          method: "presencial",
+          note: "Cliente autoriza los dos servicios",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await command({ action: "startOrder" })).status).toBe(200);
+    const additionId = crypto.randomUUID();
+    expect(
+      (
+        await command(
+          {
+            action: "order.addition",
+            title: "Propuesta adicional",
+            items: [{ productId: "orders-oil", quantity: 1 }],
+            labor: 0,
+          },
+          additionId,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await command({ action: "order.consumption", items: [] })).status,
+    ).toBe(400);
+    expect(
+      (
+        await command({
+          action: "order.additionDecision",
+          additionId,
+          decision: "rejected",
+          method: "telefono",
+          note: "Cliente no lo requiere",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await command({
+          action: "order.consumption",
+          items: [{ productId: "orders-oil", quantity: 5 }],
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await command({
+          action: "order.consumption",
+          items: [
+            { productId: "orders-oil", quantity: 3.25 },
+            { productId: "orders-filter", quantity: 1 },
+          ],
+          note: "Consumos medidos",
+        })
+      ).status,
+    ).toBe(200);
+    const finishId = crypto.randomUUID();
+    const finish = await Promise.all([
+      command({ action: "finishOrder" }, finishId),
+      command({ action: "finishOrder" }, finishId),
+    ]);
+    expect(finish.map((r) => r.status)).toEqual([200, 200]);
+    expect(
+      (await db.doc("tenants/alpha/products/orders-oil").get()).data()?.stock,
+    ).toBe(96.75);
+    expect(
+      (
+        await db
+          .collection("tenants/alpha/reminders")
+          .where("vehicleId", "==", "v-orders")
+          .get()
+      ).size,
+    ).toBe(2);
+    expect((await command({ action: "deliverOrder" })).status).toBe(400);
+    const open = await db
+      .collection("tenants/alpha/cash")
+      .where("branchId", "==", "main")
+      .where("closedAt", "==", null)
+      .get();
+    if (open.empty)
+      expect(
+        (await command({ action: "openCash", branchId: "main", opening: 0 }))
+          .status,
+      ).toBe(200);
+    expect(
+      (await command({ action: "chargeOrder", method: "cash" })).status,
+    ).toBe(200);
+    const order = (await db.doc("tenants/alpha/orders/" + id).get()).data()!;
+    expect(order.workStatus).toBe("ready");
+    expect(order.paymentStatus).toBe("paid");
+    const sale = (
+      await db
+        .collection("tenants/alpha/sales")
+        .where("orderId", "==", id)
+        .get()
+    ).docs[0].data();
+    expect(sale.total).toBe(2525);
+    expect(sale.cost).toBe(295);
+    expect((await command({ action: "deliverOrder" })).status).toBe(200);
+    expect(
+      (await db.doc("tenants/alpha/appointments/a-orders").get()).data()
+        ?.status,
+    ).toBe("completed");
+    expect(
+      (await db.doc("tenants/alpha/orders/" + id).get()).data()?.workStatus,
+    ).toBe("delivered");
+  });
+  it("keeps order photos private, validates content and deduplicates uploads", async () => {
+    const { db } = admin();
+    const seed = demoState(),
+      id = "photo-order";
+    await db.doc("tenants/alpha/orders/" + id).set({
+      ...seed.orders[0],
+      id,
+      customerId: "c1",
+      status: "received",
+      workStatus: "received",
+    });
+    const base64 = Buffer.from([255, 216, 255, 217]).toString("base64"),
+      operation = crypto.randomUUID();
+    const payload = {
+      orderId: id,
+      base64,
+      phase: "arrival",
+      caption: "Guardabarros al ingresar",
+    };
+    const upload = await Promise.all([
+      call(ownerToken, "order.photo.upload", payload, "alpha", operation),
+      call(ownerToken, "order.photo.upload", payload, "alpha", operation),
+    ]);
+    expect(upload.map((r) => r.status)).toEqual([200, 200]);
+    expect(upload.some((r) => r.data.replayed)).toBe(true);
+    expect(
+      (await db.doc("tenants/alpha/orders/" + id).get()).data()?.photos,
+    ).toHaveLength(1);
+    const read = await call(ownerToken, "order.photo.read", {
+      orderId: id,
+      photoId: operation,
+    });
+    expect(read.data.dataUrl).toBe("data:image/jpeg;base64," + base64);
+    expect(
+      (
+        await call(clientToken, "order.photo.read", {
+          orderId: id,
+          photoId: operation,
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "order.photo.read",
+          { orderId: id, photoId: operation },
+          "beta",
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(ownerToken, "order.photo.read", {
+          orderId: "ot1001",
+          photoId: operation,
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "order.photo.upload",
+          {
+            ...payload,
+            base64: Buffer.from("<html>invalid</html>").toString("base64"),
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "order.photo.upload",
+          { ...payload, base64: "A".repeat(240004) },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          clientToken,
+          "order.photo.upload",
+          payload,
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    const projected = await call(clientToken, "snapshot");
+    expect(
+      projected.data.state.orders.find((o: any) => o.id === id).photos,
+    ).toEqual([]);
+    await db.doc("tenants/alpha/orders/" + id).update({
+      deliveredAt: new Date().toISOString(),
+      workStatus: "delivered",
+    });
+    expect(
+      (
+        await call(
+          ownerToken,
+          "order.photo.upload",
+          payload,
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
   });
 });

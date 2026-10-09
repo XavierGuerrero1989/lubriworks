@@ -29,7 +29,7 @@ export const guides: HelpGuide[] = [
       "Cargá las sucursales en Configuración y los productos en Productos y stock.",
       "Definí los servicios, sus insumos, precio de mano de obra e intervalo de mantenimiento en Servicios y precios.",
       "Registrá al cliente y su vehículo en Clientes y vehículos.",
-      "Creá la orden, finalizá el servicio y cobralo desde Ventas y caja.",
+      "Creá la orden, registrá la autorización del presupuesto, comenzá el trabajo y confirmá los consumos reales antes de finalizar. Luego cobrá y entregá el vehículo.",
     ],
     note: "Cada persona ve las secciones habilitadas para su rol.",
     destination: "dashboard",
@@ -47,7 +47,7 @@ export const guides: HelpGuide[] = [
       "Después del cobro, Entregar vehículo registra la entrega y completa el turno vinculado. El vehículo sale del tablero y conserva su historial.",
       "Buscá por patente, cliente o responsable y tocá un contador para filtrar un estado.",
     ],
-    note: "Los registros antiguos sin hora muestran Sin hora registrada. La gestión de presupuestos pendientes se incorporará en Órdenes de servicio.",
+    note: "Los registros antiguos sin hora muestran Sin hora registrada. Los presupuestos y adicionales pendientes se resuelven desde la ficha en Órdenes de servicio.",
     destination: "dashboard",
   },
   {
@@ -134,6 +134,24 @@ export const guides: HelpGuide[] = [
     ],
     note: "Los turnos sin duración se consideran de 60 minutos y las sucursales sin capacidad definida, de un puesto. Las sugerencias controlan reservas y capacidad; confirmá que el horario coincida con la atención del local.",
     destination: "appointments",
+  },
+  {
+    id: "staff-order-desk",
+    scope: "staff",
+    section: "orders",
+    title: "¿Cómo trabajo con una orden de servicio?",
+    keywords:
+      "orden presupuesto aprobar autorizar autorización adicional consumo real fotos trabajo entrega finalizar cancelar revisión imprimir",
+    steps: [
+      "Recibí al cliente desde Inicio o Agenda, o creá una orden desde Órdenes de servicio. Elegí los servicios, insumos adicionales y kilometraje real.",
+      "Revisá el presupuesto y usá Imprimir presupuesto para compartirlo. Registrá la decisión del cliente, el medio y una constancia de quién autorizó o rechazó.",
+      "Comenzá el trabajo. Si aparece algo nuevo, proponé un adicional y registrá su decisión. El precio autorizado se conserva aunque cambie el catálogo.",
+      "Actualizá responsable, controles realizados, notas y recomendaciones. Adjuntá fotos de recepción, trabajo o entrega en la ficha.",
+      "Confirmá los consumos reales: quitá lo que no se usó y corregí cantidades. Para superar lo autorizado, registrá primero un adicional aprobado.",
+      "Finalizá: se descuenta el stock utilizado y se generan los próximos mantenimientos de los servicios incluidos. Cobrá y luego entregá el vehículo para completar el turno vinculado.",
+    ],
+    note: "Las autorizaciones las registra el personal a partir de lo comunicado por el cliente. Las fotos y recomendaciones son internas. Una orden iniciada no puede cancelarse desde esta ficha. Los presupuestos rechazados pueden revisarse antes de comenzar.",
+    destination: "orders",
   },
   {
     id: "staff-stock",

@@ -1,7 +1,14 @@
 import { z } from "zod";
-import { dueInfo, today, type Reminder, type Vehicle } from "./model.js";
+import {
+  dueInfo,
+  today,
+  type Reminder,
+  type Vehicle,
+  type Access,
+} from "./model.js";
 export const notificationSettingsSchema = z.object({
   enabled: z.boolean().default(true),
+  visitEnabled: z.boolean().default(true),
   daysBefore: z.number().int().min(0).max(365).default(15),
   kmBefore: z.number().int().min(0).max(20000).default(500),
   repeatDays: z.number().int().min(1).max(90).default(7),
@@ -32,6 +39,7 @@ export const preferencesSchema = z.object({
   maintenance: z.boolean().default(true),
   extinguisher: z.boolean().default(true),
   messages: z.boolean().default(true),
+  visit: z.boolean().default(true),
 });
 export function reminderStage(
   r: Reminder,
@@ -67,4 +75,17 @@ export function renderNotice(
         ? "vencido; confirmá la fecha y el kilometraje"
         : "se aproxima según la fecha o el uso estimado",
     );
+}
+
+// Push links select only an already authorized customer membership.
+export function noticeAccess(accesses: Access[], search: string) {
+  const query = new URLSearchParams(search);
+  if (query.get("portal") !== "notifications") return undefined;
+  return accesses.find(
+    (a) =>
+      a.tenant.id === query.get("tenant") &&
+      a.tenant.active &&
+      a.member.active &&
+      a.member.role === "customer",
+  );
 }

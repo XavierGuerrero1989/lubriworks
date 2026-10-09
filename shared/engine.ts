@@ -1,3 +1,4 @@
+import { visitNotices } from "./visitNotices.js";
 import { z } from "zod";
 import { validateService, serviceAvailable, serviceLabel } from "./services.js";
 import { purchaseOperations, validatePurchase } from "./purchases.js";
@@ -139,13 +140,17 @@ export function execute(
       });
     }
   };
+  const complete = () => {
+    s.notifications.push(...visitNotices(original, s, id, now));
+    return s;
+  };
   if (
     purchaseOperations(s, member, cmd, id, now, useStock) ||
     orderOperations(s, member, cmd, id, now) ||
     vehicleOperations(s, member, cmd, id, now) ||
     billingOperations(s, member, cmd, id, now, useStock)
   )
-    return s;
+    return complete();
   if (cmd.action === "save") {
     const collection = z
       .enum(Object.keys(schemas) as [Collection, ...Collection[]])
@@ -817,5 +822,5 @@ export function execute(
     );
     n.read = true;
   } else throw new Error("Acción desconocida.");
-  return s;
+  return complete();
 }

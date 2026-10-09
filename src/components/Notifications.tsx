@@ -1,3 +1,6 @@
+import { visitObsolete, visitLabels } from "../../shared/visitNotices";
+import { reportDay } from "../../shared/reports";
+import "./notifications.css";
 import { useEffect, useState, useRef } from "react";
 import { Bell, RefreshCw } from "lucide-react";
 import { rpc } from "../lib/api";
@@ -9,14 +12,17 @@ import {
   type NotificationSettings,
 } from "../../shared/notifications";
 import { today, type Access, type State } from "../../shared/model";
-import { Section, Empty, Stat, fmtDate } from "./ui";
+import { Section, Empty, Stat, fmtDate, exportCsv } from "./ui";
 type Overview = {
   settings?: NotificationSettings;
+  pushConfigured?: boolean;
+  scheduler?: { lastRunAt: string | null; completed: boolean | null };
   preferences?: {
     pushEnabled: boolean;
     maintenance: boolean;
     extinguisher: boolean;
     messages: boolean;
+    visit: boolean;
   };
   devices: {
     id: string;
@@ -33,6 +39,8 @@ type Overview = {
     sentAt?: string;
     updatedAt?: string;
     statusCode?: number;
+    nextAttemptAt?: number;
+    leaseUntil?: number;
   }[];
 };
 export function Notifications({
@@ -44,6 +52,10 @@ export function Notifications({
   onAppointment,
   onReading,
   onRefresh,
+  branch = "all",
+  onOrder,
+  onAgenda,
+  onVisit,
 }: {
   access: Access;
   state: State;
@@ -53,6 +65,10 @@ export function Notifications({
   onAppointment: (id?: string) => void;
   onReading: (id: string) => void;
   onRefresh: () => Promise<void>;
+  branch?: string;
+  onOrder?: (id: string) => void;
+  onAgenda?: () => void;
+  onVisit?: (order: boolean) => void;
 }) {
   const pending = useRef(new Map<string, string>());
   const customer = access.member.role === "customer";
@@ -67,6 +83,7 @@ export function Notifications({
       maintenance: true,
       extinguisher: true,
       messages: true,
+      visit: true,
     }),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -77,7 +94,10 @@ export function Notifications({
       body: "",
     }),
     [filter, setFilter] = useState(""),
-    [status, setStatus] = useState("all");
+    [status, setStatus] = useState("all"),
+    [category, setCategory] = useState("all"),
+    [from, setFrom] = useState(""),
+    [to, setTo] = useState("");
   async function load() {
     if (demo) {
       setError(
@@ -122,7 +142,7 @@ export function Notifications({
       pending.current.delete(requestKey);
       setError(
         action === "notifications.send"
-          ? "Mensaje creado en el portal. El push se procesa en la revisión diaria."
+          ? "Mensaje creado en el portal. Se intentó el push; consultá su estado en Historial."
           : "Cambios guardados.",
       );
     } catch (e) {
@@ -132,6 +152,10 @@ export function Notifications({
     }
   }
   async function sendMessage() {
+    if (!message.title.trim() || !message.body.trim() || !message.customerId) {
+      setError("Elegí un cliente y completá título y mensaje antes de enviar.");
+      return;
+    }
     if (message.customerId !== "all")
       return save("notifications.send", message);
     if (demo) {
@@ -163,7 +187,7 @@ export function Notifications({
           JSON.stringify({ ...message, customerId: c.id, vehicleId: "" }),
         );
       setError(
-        `${sent} mensajes creados en el portal. Push en la próxima revisión diaria.`,
+        `${sent} mensajes creados en el portal. Se intentó el push; consultá su estado en Historial.`,
       );
     } catch (e) {
       setError(`${sent} mensajes creados. ${(e as Error).message}`);
@@ -189,8 +213,17 @@ export function Notifications({
   const notices = s.notifications
     .filter(
       (n) =>
+        (customer || branch === "all" || n.branchId === branch) &&
+        (tab !== "Visitas" || n.origin === "operational") &&
+        (category === "all" ||
+          (category === "visit"
+            ? n.origin === "operational"
+            : n.category === category ||
+              (category === "maintenance" && !n.category && !!n.reminderId))) &&
+        (!from || reportDay(n.date) >= from) &&
+        (!to || reportDay(n.date) <= to) &&
         (!filter ||
-          `${n.title} ${n.body} ${s.customers.find((c) => c.id === n.customerId)?.name || ""}`
+          `${n.title} ${n.body} ${s.customers.find((c) => c.id === n.customerId)?.name || ""} ${s.vehicles.find((v) => v.id === n.vehicleId)?.plate || ""}`
             .toLowerCase()
             .includes(filter.toLowerCase())) &&
         (status === "all" ||
@@ -198,7 +231,8 @@ export function Notifications({
             ? n.read
             : status === "unread"
               ? !n.read
-              : overview.deliveries.some(
+              : n.pushStatus === status ||
+                overview.deliveries.some(
                   (d) => d.noticeId === n.id && d.status === status,
                 ))),
     )
@@ -231,16 +265,27 @@ export function Notifications({
           <p>
             {customer
               ? "Tus avisos, preferencias y dispositivos."
-              : "Recordatorios automáticos, mensajes y seguimiento por cliente."}
+              : "Avisos de la visita, recordatorios y seguimiento por cliente."}
           </p>
         </div>
-        {button("Actualizar", () => void load())}
+        {button("Actualizar", async () => {
+          setBusy(true);
+          try {
+            await onRefresh();
+            await load();
+          } catch (e) {
+            setError((e as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        })}
       </div>
       <div className="notification-tabs">
         {(customer
           ? ["Bandeja", "Preferencias", "Dispositivos"]
           : [
               "Resumen",
+              "Visitas",
               "Reglas automáticas",
               "Mensajes",
               "Historial",
@@ -259,6 +304,30 @@ export function Notifications({
       {error && (
         <p className="info-box" role="status">
           {error}
+        </p>
+      )}
+      {!customer && (
+        <p className="info-box">
+          Visitas y mensajes: intento de push al ocurrir el cambio.
+          Mantenimiento y reintentos automáticos: revisión diaria a las 09:00 de
+          Argentina.{" "}
+          {demo
+            ? "Demo: no se envían push reales."
+            : overview.pushConfigured === false
+              ? "Push sin configurar: los avisos quedan en el portal."
+              : "El envío requiere permiso, preferencias y un dispositivo con acceso activo."}
+          {overview.scheduler?.lastRunAt && (
+            <>
+              {" "}
+              Última ejecución global: {fmtDate(
+                overview.scheduler.lastRunAt,
+              )} ·{" "}
+              {overview.scheduler.completed
+                ? "recorrido completo"
+                : "recorrido pendiente de continuar"}
+              .
+            </>
+          )}
         </p>
       )}
       {tab === "Resumen" && (
@@ -299,7 +368,10 @@ export function Notifications({
               icon={<RefreshCw />}
             />
           </div>
-          <Section title="Próximos mantenimientos">
+          <Section
+            title="Próximos mantenimientos"
+            subtitle="De toda la empresa; los mantenimientos no tienen una sucursal asignada."
+          >
             <div className="table-wrap">
               <table>
                 <thead>
@@ -347,6 +419,17 @@ export function Notifications({
           subtitle="Se considera lo que ocurra primero: fecha o kilometraje estimado."
         >
           <div className="notification-form">
+            {check(
+              "Intentar push inmediato de avisos de la visita",
+              settings.visitEnabled,
+              (v) => setSettings({ ...settings, visitEnabled: v }),
+            )}
+            <p className="notice-caption">
+              Turno confirmado, reprogramado o cancelado; presupuesto y
+              adicional pendiente; vehículo listo. Los avisos se guardan en el
+              portal aunque desactives su push. Las decisiones de presupuesto se
+              registran por el personal; no se aprueban desde esta bandeja.
+            </p>
             {check("Activar recordatorios automáticos", settings.enabled, (v) =>
               setSettings({ ...settings, enabled: v }),
             )}
@@ -432,7 +515,7 @@ export function Notifications({
           </Section>
           <Section
             title="Mensaje a un cliente"
-            subtitle="Se guarda en su portal. El push respeta sus preferencias y se procesa a las 09:00."
+            subtitle="Se guarda en su portal. Se intenta push al enviar, respetando sus preferencias. Los fallos quedan para reintento."
           >
             <div className="notification-form">
               <label>
@@ -512,15 +595,122 @@ export function Notifications({
           </Section>
         </>
       )}
-      {(tab === "Historial" || tab === "Bandeja") && (
-        <Section title={customer ? "Tu bandeja" : "Historial de avisos"}>
-          <div className="notification-tabs">
+      {(tab === "Historial" || tab === "Bandeja" || tab === "Visitas") && (
+        <Section
+          title={
+            customer
+              ? "Tu bandeja"
+              : tab === "Visitas"
+                ? "Avisos operativos de la visita"
+                : "Historial de avisos"
+          }
+          action={
+            !customer ? (
+              <button
+                className="button secondary small"
+                disabled={!!from && !!to && from > to}
+                onClick={() =>
+                  exportCsv(
+                    "notificaciones",
+                    notices.map((n) => ({
+                      Fecha: n.date,
+                      Cliente:
+                        s.customers.find((c) => c.id === n.customerId)?.name ||
+                        n.customerId,
+                      Patente:
+                        s.vehicles.find((v) => v.id === n.vehicleId)?.plate ||
+                        "",
+                      Sucursal:
+                        s.branches.find((b) => b.id === n.branchId)?.name ||
+                        "Sin sucursal registrada",
+                      Categoria: n.category || "Anterior",
+                      Evento: n.event
+                        ? visitLabels[n.event]
+                        : n.origin || "Anterior",
+                      Titulo: n.title,
+                      Mensaje: n.body,
+                      LeidoEnPortal: n.read,
+                      EstadoPush: n.pushStatus || "Sin registro",
+                      Motivo: n.pushReason || "",
+                      SituacionActual: visitObsolete(n, s),
+                      Intentos: overview.deliveries
+                        .filter((d) => d.noticeId === n.id)
+                        .reduce((sum, d) => sum + d.attempts, 0),
+                    })),
+                  )
+                }
+              >
+                Exportar historial
+              </button>
+            ) : undefined
+          }
+        >
+          {!customer && (
+            <div className="notice-filters">
+              <label>
+                Desde
+                <input
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                />
+              </label>
+              <label>
+                Hasta
+                <input
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                />
+              </label>
+              <label>
+                Categoría
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  <option value="all">Todas</option>
+                  <option value="visit">Visita</option>
+                  <option value="maintenance">Mantenimiento</option>
+                  <option value="extinguisher">Matafuegos</option>
+                  <option value="messages">Mensaje manual</option>
+                </select>
+              </label>
+              <button
+                className="button secondary small"
+                onClick={() => {
+                  setFrom("");
+                  setTo("");
+                  setCategory("all");
+                  setStatus("all");
+                  setFilter("");
+                }}
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          )}
+          {!customer && branch !== "all" && (
+            <p className="notice-caption">
+              Filtrando avisos con esta sucursal registrada. Los avisos
+              anteriores, manuales y de mantenimiento sin sucursal se consultan
+              en Todas las sucursales.
+            </p>
+          )}
+          {from && to && from > to && (
+            <p role="alert">Desde debe ser anterior o igual a Hasta.</p>
+          )}
+          <div className="notification-tabs notice-controls">
             <input
-              placeholder="Buscar aviso o cliente"
+              placeholder="Buscar aviso, cliente o patente"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             />
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <select
+              aria-label="Estado del aviso"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
               <option value="all">Todos</option>
               <option value="read">Leídos en portal</option>
               <option value="unread">Sin leer</option>
@@ -529,6 +719,10 @@ export function Notifications({
                   <option value="sent">Push enviado</option>
                   <option value="pending">Fallos temporales</option>
                   <option value="permanent-failure">Dispositivo vencido</option>
+                  <option value="exhausted">Intentos agotados</option>
+                  <option value="skipped">Sin push / preferencias</option>
+                  <option value="superseded">Situación resuelta</option>
+                  <option value="failed">Fallos definitivos</option>
                 </>
               )}
             </select>
@@ -541,6 +735,12 @@ export function Notifications({
                 </i>
                 <div>
                   <h3>{n.title}</h3>
+                  {n.origin === "operational" && (
+                    <small>
+                      Aviso de visita ·{" "}
+                      {n.event ? visitLabels[n.event] : "Operativo"}
+                    </small>
+                  )}
                   <p>{n.body}</p>
                   <small>
                     {fmtDate(n.date)} ·{" "}
@@ -548,10 +748,33 @@ export function Notifications({
                     {!customer &&
                       ` · ${s.customers.find((c) => c.id === n.customerId)?.name || "Cliente"}`}
                   </small>
+                  {n.origin === "operational" && (
+                    <p className="notice-caption">
+                      {visitObsolete(n, s)
+                        ? `Situación actual: ${visitObsolete(n, s)}. Este aviso se conserva como historial.`
+                        : "Consultá la visita o el turno para ver su estado actual."}
+                    </p>
+                  )}
+                  {!customer && (
+                    <div className="row-actions">
+                      {n.orderId &&
+                        onOrder &&
+                        button("Abrir orden", () => onOrder(n.orderId!))}
+                      {n.appointmentId &&
+                        onAgenda &&
+                        button("Ir a Agenda", onAgenda)}
+                    </div>
+                  )}
                   {customer ? (
                     <div className="notification-tabs">
                       {!n.read && button("Marcar leído", () => onRead(n.id))}
-                      {n.vehicleId && (
+                      {n.origin === "operational" &&
+                        onVisit &&
+                        button(
+                          n.orderId ? "Ver visita" : "Ver mis turnos",
+                          () => onVisit(!!n.orderId),
+                        )}
+                      {n.vehicleId && n.origin !== "operational" && (
                         <>
                           {button("Ver mantenimiento", () =>
                             document
@@ -571,6 +794,25 @@ export function Notifications({
                     </div>
                   ) : (
                     <div>
+                      <p className="notice-state">
+                        Push:{" "}
+                        {n.pushStatus === "sent"
+                          ? "aceptado por el servicio de envío"
+                          : n.pushStatus === "superseded"
+                            ? "omitido: situación resuelta"
+                            : n.pushStatus === "skipped"
+                              ? "sin envío"
+                              : n.pushStatus === "failed"
+                                ? "fallo en uno o más dispositivos"
+                                : n.pushStatus === "pending"
+                                  ? visitObsolete(n, s)
+                                    ? "no se enviará: situación resuelta"
+                                    : "en cola o pendiente de reintento"
+                                  : "sin registro"}
+                        {n.pushReason ? ` · ${n.pushReason}` : ""}. La lectura
+                        en portal se registra por separado; push aceptado no
+                        demuestra que el teléfono lo mostró.
+                      </p>
                       {overview.deliveries
                         .filter((d) => d.noticeId === n.id)
                         .map((d) => (
@@ -581,9 +823,11 @@ export function Notifications({
                                 ? "Dispositivo vencido"
                                 : d.status === "sending"
                                   ? "En proceso"
-                                  : "Fallo temporal pendiente de reintento"}{" "}
+                                  : d.status === "exhausted"
+                                    ? "Intentos agotados; requiere revisión"
+                                    : "Fallo temporal pendiente de reintento"}{" "}
                             · {d.attempts} intento(s){" "}
-                            {d.status === "pending" &&
+                            {["pending", "exhausted"].includes(d.status) &&
                               button(
                                 "Reintentar",
                                 () =>
@@ -596,11 +840,14 @@ export function Notifications({
                       {!overview.deliveries.some(
                         (d) => d.noticeId === n.id,
                       ) && (
-                        <p>Disponible en portal. Sin envío push registrado.</p>
+                        <p>
+                          Disponible en portal. Sin intento por dispositivo
+                          registrado.
+                        </p>
                       )}
                     </div>
                   )}
-                  {customer && n.vehicleId && (
+                  {customer && n.vehicleId && n.origin !== "operational" && (
                     <div id={`notice-maintenance-${n.id}`}>
                       <p>
                         <strong>
@@ -640,6 +887,9 @@ export function Notifications({
               {check("Permitir notificaciones push", prefs.pushEnabled, (v) =>
                 setPrefs({ ...prefs, pushEnabled: v }),
               )}
+              {check("Avisos de turnos y visitas", prefs.visit, (v) =>
+                setPrefs({ ...prefs, visit: v }),
+              )}
               {check("Mantenimiento y servicios", prefs.maintenance, (v) =>
                 setPrefs({ ...prefs, maintenance: v }),
               )}
@@ -662,8 +912,9 @@ export function Notifications({
         ) : (
           <Section title="Canales y clientes">
             <p>
-              Canales disponibles: portal y push. Revisión diaria a las 09:00 de
-              Argentina.
+              Canales disponibles: portal y push. Visitas y mensajes se intentan
+              al ocurrir el evento; mantenimiento y reintentos se revisan
+              diariamente.
             </p>
             <div className="table-wrap">
               <table>
@@ -671,6 +922,7 @@ export function Notifications({
                   <tr>
                     <th>Cliente</th>
                     <th>Push en perfil</th>
+                    <th>Avisos de visita</th>
                     <th>Dispositivos registrados</th>
                   </tr>
                 </thead>
@@ -679,6 +931,11 @@ export function Notifications({
                     <tr key={c.id}>
                       <td>{c.name}</td>
                       <td>{c.pushEnabled ? "Permitido" : "Desactivado"}</td>
+                      <td>
+                        {c.notificationPreferences?.visit === false
+                          ? "Desactivados"
+                          : "Permitidos"}
+                      </td>
                       <td>
                         {
                           overview.devices.filter((d) => d.customerId === c.id)

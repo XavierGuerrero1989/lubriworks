@@ -233,12 +233,14 @@ export const guides: HelpGuide[] = [
     keywords:
       "notificacion notificaciones aviso recordatorio push mensaje enviar plantilla vencimiento anticipacion repetir activar desactivar",
     steps: [
-      "En Notificaciones → Reglas automáticas, configurá días y kilómetros de anticipación, repeticiones y pausa por turno.",
+      "En Visitas, consultá avisos de turno confirmado, reprogramado o cancelado, presupuesto/adicional pendiente y vehículo listo. Abrir orden o Ir a Agenda te lleva a la sección correspondiente.",
+      "En Reglas automáticas, configurá el push de la visita por separado de días, kilómetros de anticipación, repeticiones y pausa de mantenimiento por turno.",
       "En Mensajes, editá la plantilla o enviá un mensaje a un cliente o a todos.",
-      "En Historial, consultá si se leyó en el portal y los intentos de push; reintentá fallos temporales.",
+      "En Historial, filtrá por categoría, período, estado, cliente o patente; la sucursal filtra avisos con sucursal registrada. Exportá el CSV si lo necesitás.",
+      "Revisá los intentos por dispositivo: un envío aceptado no prueba que el teléfono lo mostró. Reintentar vuelve a comprobar el estado de la visita y las preferencias; no reenvía a dispositivos que ya lo aceptaron.",
       "En Preferencias, revisá qué clientes permiten push y cuántos dispositivos registraron.",
     ],
-    note: "El mensaje manual aparece inmediatamente en el portal. Push se procesa a las 09:00 de Argentina y requiere permiso del cliente y un dispositivo registrado. Enviado no garantiza que el teléfono lo haya mostrado.",
+    note: "Los avisos de la visita y mensajes aparecen al realizar la operación y se intenta push en ese momento. Mantenimiento y reintentos automáticos se revisan diariamente a las 09:00 de Argentina. Un aviso sobre una situación ya resuelta queda como historial y no se envía tarde. La aprobación del presupuesto se registra por el personal; el rediseño del portal del cliente sigue pendiente.",
     destination: "notifications",
   },
   {

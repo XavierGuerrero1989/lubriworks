@@ -1,3 +1,4 @@
+import { dispatchNotices } from "./notificationDelivery.js";
 import { orderPhotoRpc } from "./orderPhotos.js";
 import { createCustomerAccount } from "./customerAccounts.js";
 import { notificationRpc } from "./notifications.js";
@@ -217,12 +218,22 @@ export default async function handler(
         ),
       );
     }
-    if (action.startsWith("notifications."))
-      return respond(
-        res,
-        200,
-        await notificationRpc(db, tenantId, uid, action, payload, operationId),
+    if (action.startsWith("notifications.")) {
+      const result = await notificationRpc(
+        db,
+        tenantId,
+        uid,
+        action,
+        payload,
+        operationId,
       );
+      if (result && "noticeIds" in result)
+        await dispatchNotices(
+          db.doc(`tenants/${tenantId}`),
+          result.noticeIds as string[],
+        );
+      return respond(res, 200, result);
+    }
     if (action.startsWith("order.photo."))
       return respond(
         res,
@@ -450,7 +461,11 @@ export default async function handler(
             receipt.data()?.fingerprint !== fingerprint
           )
             throw new Error("Identificador de operación reutilizado.");
-          return { ok: true, replayed: true };
+          return {
+            ok: true,
+            replayed: true,
+            noticeIds: (receipt.data()?.noticeIds || []) as string[],
+          };
         }
         const before = await loadCommandState(
           db,
@@ -466,10 +481,14 @@ export default async function handler(
           payload as Command,
           operationId,
         );
+        const noticeIds = after.notifications
+          .filter((n) => !before.notifications.some((old) => old.id === n.id))
+          .map((n) => n.id);
         persistDiff(db, tx, tenantId, before, after);
         tx.create(receipt.ref, {
           uid,
           fingerprint,
+          noticeIds,
           createdAt: new Date().toISOString(),
         });
         tx.create(db.doc(`tenants/${tenantId}/audit/${operationId}`), {
@@ -479,9 +498,11 @@ export default async function handler(
           target: payload.id || operationId,
           date: new Date().toISOString(),
         });
-        return { ok: true };
+        return { ok: true, noticeIds };
       });
-      return respond(res, 200, result);
+      if ("noticeIds" in result)
+        await dispatchNotices(tref, result.noticeIds ?? []);
+      return respond(res, 200, { ok: true, replayed: "replayed" in result });
     }
     throw new Error("Acción desconocida.");
   } catch (error) {

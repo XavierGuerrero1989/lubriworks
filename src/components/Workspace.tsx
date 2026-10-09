@@ -1525,6 +1525,14 @@ export function Workspace({
   else if (tab === "notifications")
     content = (
       <Notifications
+        branch={branch}
+        onVisit={(order) => go(order ? "history" : "vehicles")}
+        onOrder={(id) => {
+          setFocusedOrder(id);
+          setBranch("all");
+          go("orders");
+        }}
+        onAgenda={() => go("appointments")}
         access={access}
         state={s}
         demo={demo}

@@ -1,3 +1,4 @@
+import { pushConfigured } from "./notificationDelivery.js";
 import type { Firestore } from "firebase-admin/firestore";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -62,8 +63,14 @@ export async function notificationRpc(
         };
       }
       const deliveries = await readPages(root.collection("deliveries"), tx);
+      const job = await tx.get(db.doc("systemJobs/reminders"));
       return {
         settings: notificationSettingsSchema.parse(config.data() || {}),
+        pushConfigured: pushConfigured(),
+        scheduler: {
+          lastRunAt: job.data()?.lastRunAt ?? null,
+          completed: job.data()?.completed ?? null,
+        },
         devices,
         deliveries: deliveries.map((d) => ({ id: d.id, ...d.data() })),
       };
@@ -82,11 +89,22 @@ export async function notificationRpc(
         receipt.data()?.fingerprint !== fingerprint
       )
         throw new Error("Identificador reutilizado.");
-      return { ok: true };
+      return {
+        ok: true,
+        noticeIds: (receipt.data()?.noticeIds || []) as string[],
+      };
     }
+    const noticeIds: string[] = [];
     if (action === "notifications.settings") {
       if (customer) throw new Error("Acción exclusiva del administrador.");
-      tx.set(configRef, notificationSettingsSchema.parse(payload));
+      const previous = await tx.get(configRef);
+      tx.set(
+        configRef,
+        notificationSettingsSchema.parse({
+          visitEnabled: previous.data()?.visitEnabled ?? true,
+          ...payload,
+        }),
+      );
     } else if (action === "notifications.preferences") {
       if (!customer) throw new Error("Acción exclusiva del cliente.");
       const data = preferencesSchema.parse(payload);
@@ -95,6 +113,8 @@ export async function notificationRpc(
         .doc(key.parse(access.member.customerId));
       const c = await tx.get(cRef);
       if (!c.exists) throw new Error("Cliente no encontrado.");
+      if (!Object.hasOwn(payload, "visit"))
+        data.visit = c.data()?.notificationPreferences?.visit ?? true;
       const { pushEnabled, ...notificationPreferences } = data;
       tx.update(cRef, { pushEnabled, notificationPreferences });
     } else if (action === "notifications.deviceRemove") {
@@ -120,6 +140,7 @@ export async function notificationRpc(
         if (v.data()?.customerId !== data.customerId)
           throw new Error("Vehículo ajeno.");
       }
+      noticeIds.push(operationId);
       tx.create(root.collection("notifications").doc(operationId), {
         id: operationId,
         ...data,
@@ -133,20 +154,31 @@ export async function notificationRpc(
       if (customer) throw new Error("Acción exclusiva del administrador.");
       const ref = root.collection("deliveries").doc(key.parse(payload.id));
       const d = await tx.get(ref);
-      if (!d.exists || d.data()?.status !== "pending")
-        throw new Error("Solo se pueden reintentar fallos temporales.");
+      if (!d.exists || !["pending", "exhausted"].includes(d.data()?.status))
+        throw new Error(
+          "Solo se pueden reintentar fallos temporales o intentos agotados.",
+        );
       const noticeRef = root
         .collection("notifications")
         .doc(key.parse(d.data()?.noticeId));
       const notice = await tx.get(noticeRef);
       if (!notice.exists)
         throw new Error("Aviso no disponible para reintento.");
-      tx.update(ref, { attempts: 0, leaseUntil: 0 });
+      if ((d.data()?.leaseUntil || 0) > Date.now())
+        throw new Error("El envío está en curso. Esperá antes de reintentar.");
+      noticeIds.push(noticeRef.id);
+      tx.update(ref, {
+        status: "pending",
+        attempts: 0,
+        leaseUntil: 0,
+        nextAttemptAt: 0,
+      });
       tx.update(noticeRef, { pushStatus: "pending" });
     } else throw new Error("Acción desconocida.");
     tx.create(receiptRef, {
       uid,
       fingerprint,
+      noticeIds,
       createdAt: new Date().toISOString(),
     });
     tx.create(root.collection("audit").doc(operationId), {
@@ -154,6 +186,6 @@ export async function notificationRpc(
       action,
       date: new Date().toISOString(),
     });
-    return { ok: true };
+    return { ok: true, noticeIds };
   });
 }

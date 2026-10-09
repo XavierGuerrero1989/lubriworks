@@ -20,13 +20,22 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data.json();
   } catch {}
+  const tenant =
+    typeof data.tenantId === "string" &&
+    /^[a-zA-Z0-9_-]{1,128}$/.test(data.tenantId)
+      ? data.tenantId
+      : "";
   event.waitUntil(
     self.registration.showNotification(data.title || "LubriWorks", {
       body: data.body || "Tenés un nuevo recordatorio en tu portal.",
       icon: "/brand/icon.png",
       badge: "/brand/icon.png",
       tag: data.tag || "lubriworks",
-      data: { url: "/?portal=notifications" },
+      data: {
+        url:
+          "/?portal=notifications" +
+          (tenant ? "&tenant=" + encodeURIComponent(tenant) : ""),
+      },
     }),
   );
 });
@@ -38,11 +47,17 @@ self.addEventListener("notificationclick", (event) => {
         type: "window",
         includeUncontrolled: true,
       });
+      const raw = event.notification.data?.url;
+      const url =
+        typeof raw === "string" &&
+        /^\/\?portal=notifications(?:&tenant=[a-zA-Z0-9_-]+)?$/.test(raw)
+          ? raw
+          : "/?portal=notifications";
       if (windows.length) {
-        await windows[0].navigate("/?portal=notifications");
+        await windows[0].navigate(url);
         return windows[0].focus();
       }
-      return self.clients.openWindow("/?portal=notifications");
+      return self.clients.openWindow(url);
     })(),
   );
 });

@@ -79,6 +79,7 @@ export const schemas = {
         maintenance: z.boolean(),
         extinguisher: z.boolean(),
         messages: z.boolean(),
+        visit: z.boolean().optional(),
       })
       .optional(),
   }),
@@ -428,7 +429,16 @@ export type Notice = {
   date: string;
   read: boolean;
   reminderId?: string;
-  category?: "maintenance" | "extinguisher" | "messages";
+  category?: "maintenance" | "extinguisher" | "messages" | "visit";
+  branchId?: string;
+  event?: import("./visitNotices.js").VisitEvent;
+  appointmentId?: string;
+  orderId?: string;
+  additionId?: string;
+  entityVersion?: string;
+  pushReason?: string;
+  dueDate?: string;
+  dueKm?: number | null;
   origin?: string;
   pushStatus?: string;
 };

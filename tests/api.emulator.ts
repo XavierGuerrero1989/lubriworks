@@ -2225,3 +2225,157 @@ describe("real API + Auth / Firestore emulators", () => {
     ).toBe(400);
   });
 });
+
+it("publishes transactional visit notices and attempts immediate push through the authenticated API without replay duplicates", async () => {
+  const { vi } = await import("vitest"),
+    webpush = (await import("web-push")).default;
+  const { db } = admin(),
+    root = db.doc("tenants/alpha"),
+    seed = demoState();
+  const previous = {
+    public: process.env.VAPID_PUBLIC_KEY,
+    private: process.env.VAPID_PRIVATE_KEY,
+    subject: process.env.VAPID_SUBJECT,
+  };
+  process.env.VAPID_PUBLIC_KEY = "test";
+  process.env.VAPID_PRIVATE_KEY = "test";
+  process.env.VAPID_SUBJECT = "mailto:test@example.test";
+  const config = vi
+    .spyOn(webpush, "setVapidDetails")
+    .mockImplementation(() => {});
+  const send = vi
+    .spyOn(webpush, "sendNotification")
+    .mockResolvedValue({ statusCode: 201, body: "", headers: {} });
+  try {
+    await root
+      .collection("vehicles")
+      .doc("visit-api-vehicle")
+      .set({ ...seed.vehicles[0], id: "visit-api-vehicle", plate: "LW910AA" });
+    await root
+      .collection("customers")
+      .doc("c1")
+      .set(
+        { pushEnabled: true, notificationPreferences: { visit: true } },
+        { merge: true },
+      );
+    await root
+      .collection("subscriptions")
+      .doc("visit-api-device")
+      .set({
+        uid: "client",
+        customerId: "c1",
+        subscription: { endpoint: "https://fcm.googleapis.com/test" },
+      });
+    const data = {
+      customerId: "c1",
+      vehicleId: "visit-api-vehicle",
+      branchId: "main",
+      date: "2098-10-01",
+      time: "08:00",
+      reason: "Filtro",
+      status: "confirmed",
+    };
+    await root
+      .collection("appointments")
+      .doc("visit-api-turn")
+      .set({ ...data, id: "visit-api-turn", status: "requested" });
+    const op = crypto.randomUUID();
+    const first = await call(
+      ownerToken,
+      "command",
+      {
+        action: "save",
+        collection: "appointments",
+        id: "visit-api-turn",
+        data,
+      },
+      "alpha",
+      op,
+    );
+    expect(first.status, JSON.stringify(first.data)).toBe(200);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][1]).not.toContain("LW910AA");
+    expect(send.mock.calls[0][1]).toContain("Aviso de tu visita");
+    const notice = await root
+      .collection("notifications")
+      .doc(op + "-visit-0")
+      .get();
+    expect(notice.data()?.event).toBe("appointment-confirmed");
+    expect(notice.data()?.pushStatus).toBe("sent");
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "save",
+            collection: "appointments",
+            id: "visit-api-turn",
+            data,
+          },
+          "alpha",
+          op,
+        )
+      ).data.replayed,
+    ).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+    const move = crypto.randomUUID();
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          {
+            action: "save",
+            collection: "appointments",
+            id: "visit-api-turn",
+            data: {
+              ...data,
+              time: "09:00",
+              rescheduleReason: "Cliente solicitó",
+            },
+          },
+          "alpha",
+          move,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await root
+          .collection("notifications")
+          .doc(move + "-visit-0")
+          .get()
+      ).data()?.event,
+    ).toBe("appointment-rescheduled");
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(
+      (
+        await call(
+          otherToken,
+          "command",
+          {
+            action: "save",
+            collection: "appointments",
+            id: "visit-api-turn",
+            data,
+          },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(send).toHaveBeenCalledTimes(2);
+  } finally {
+    send.mockRestore();
+    config.mockRestore();
+    await root.collection("subscriptions").doc("visit-api-device").delete();
+    for (const [key, value] of Object.entries({
+      VAPID_PUBLIC_KEY: previous.public,
+      VAPID_PRIVATE_KEY: previous.private,
+      VAPID_SUBJECT: previous.subject,
+    }))
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+  }
+});

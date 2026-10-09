@@ -1,3 +1,4 @@
+import { noticeAccess } from "../shared/notifications";
 import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { auth } from "./lib/firebase";
@@ -54,7 +55,11 @@ export default function App() {
           setAccess(result.access);
           setPlatform(result.platform);
           setShowPlatform(result.platform);
-          if (!result.platform && result.access.length === 1)
+          const requested = noticeAccess(result.access, location.search);
+          if (requested) {
+            setShowPlatform(false);
+            await select(requested);
+          } else if (!result.platform && result.access.length === 1)
             await select(result.access[0]);
         }
       } catch (e) {

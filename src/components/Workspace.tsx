@@ -144,6 +144,9 @@ export function Workspace({
   onPlatform,
 }: Props) {
   const customer = access.member.role === "customer",
+    tenantAccesses = Array.from(
+      new Map(accesses.map((a) => [a.tenant.id, a])).values(),
+    ),
     displayName =
       (customer &&
         s.customers.find((c) => c.id === access.member.customerId)?.name) ||
@@ -1484,20 +1487,26 @@ export function Workspace({
         </div>
         <div className="tenant-select">
           <Building2 size={18} />
-          <select
-            aria-label="Seleccionar empresa"
-            value={access.tenant.id}
-            onChange={(e) => {
-              const a = accesses.find((a) => a.tenant.id === e.target.value);
-              if (a) onSwitch(a);
-            }}
-          >
-            {accesses.map((a) => (
-              <option key={a.tenant.id} value={a.tenant.id}>
-                {a.tenant.name}
-              </option>
-            ))}
-          </select>
+          {tenantAccesses.length > 1 ? (
+            <select
+              aria-label="Seleccionar empresa"
+              value={access.tenant.id}
+              onChange={(e) => {
+                const a = tenantAccesses.find(
+                  (a) => a.tenant.id === e.target.value,
+                );
+                if (a) onSwitch(a);
+              }}
+            >
+              {tenantAccesses.map((a) => (
+                <option key={a.tenant.id} value={a.tenant.id}>
+                  {a.tenant.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="tenant-name">{access.tenant.name}</span>
+          )}
         </div>
         <span className="nav-label">
           {customer ? "MI PORTAL" : "ESPACIO DE TRABAJO"}

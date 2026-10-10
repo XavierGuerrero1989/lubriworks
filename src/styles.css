@@ -222,13 +222,17 @@ input[type="checkbox"] {
   color: #61777e;
   margin-bottom: 28px;
 }
-.tenant-select select {
+.tenant-select select,
+.tenant-select .tenant-name {
   width: 100%;
   padding: 0;
   border: 0;
   background: transparent;
   font-size: 12px;
   font-weight: 600;
+}
+.tenant-select .tenant-name {
+  overflow-wrap: anywhere;
 }
 .nav-label {
   font-size: 9px;

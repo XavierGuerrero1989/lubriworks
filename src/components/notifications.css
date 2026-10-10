@@ -62,3 +62,11 @@
   background: white;
   max-width: 100%;
 }
+
+.news-withdraw-confirm {
+  padding: 20px;
+  margin: 12px 0;
+}
+.news-withdraw-confirm p {
+  margin: 0 0 12px;
+}

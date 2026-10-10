@@ -469,3 +469,114 @@ it("preserves visit opt-outs when an older settings or preferences form omits th
       ?.notificationPreferences.visit,
   ).toBe(false);
 });
+
+it("withdraws and restores promotions without deleting history, resending push, or allowing other roles", async () => {
+  const { db } = admin(),
+    root = db.doc(`tenants/${tenantId}`);
+  const call = (uid: string, ids: string[], visible: boolean, op: string) =>
+    notificationRpc(
+      db,
+      tenantId,
+      uid,
+      "notifications.newsVisibility",
+      { ids, visible },
+      op,
+    );
+  const refs = ["withdraw-pending", "withdraw-sent"].map((id) =>
+    root.collection("notifications").doc(id),
+  );
+  for (const [i, ref] of refs.entries())
+    await ref.set({
+      id: ref.id,
+      customerId: "c2",
+      vehicleId: "",
+      category: "messages",
+      origin: "manual",
+      title: "Promo",
+      body: "Condiciones",
+      read: i === 1,
+      date: new Date().toISOString(),
+      pushStatus: i === 0 ? "pending" : "sent",
+    });
+  for (const uid of ["notify-c2", "notify-tech"])
+    await expect(
+      call(uid, [refs[0].id], false, `withdraw-denied-${uid}`),
+    ).rejects.toThrow();
+  await expect(
+    call(
+      "notify-owner",
+      [refs[0].id, "missing-or-other-tenant"],
+      false,
+      "withdraw-atomic",
+    ),
+  ).rejects.toThrow();
+  expect((await refs[0].get()).data()?.newsHiddenAt).toBeUndefined();
+  await root
+    .collection("notifications")
+    .doc("withdraw-care")
+    .set({ customerId: "c2", category: "maintenance", reminderId: "r1" });
+  await expect(
+    call("notify-owner", ["withdraw-care"], false, "withdraw-not-care"),
+  ).rejects.toThrow();
+  const result = await call(
+    "notify-owner",
+    refs.map((r) => r.id),
+    false,
+    "withdraw-ok",
+  );
+  expect(result.noticeIds).toEqual([]);
+  expect(
+    await call(
+      "notify-owner",
+      refs.map((r) => r.id),
+      false,
+      "withdraw-ok",
+    ),
+  ).toEqual(result);
+  const hidden = (await refs[0].get()).data()!;
+  expect(hidden.newsHiddenAt).toBeTruthy();
+  expect(hidden.pushStatus).toBe("skipped");
+  expect(hidden.body).toBe("Condiciones");
+  expect(hidden.read).toBe(false);
+  expect((await refs[1].get()).data()?.pushStatus).toBe("sent");
+  await root
+    .collection("deliveries")
+    .doc("withdraw-retry")
+    .set({ noticeId: refs[0].id, status: "pending" });
+  await expect(
+    notificationRpc(
+      db,
+      tenantId,
+      "notify-owner",
+      "notifications.retry",
+      { id: "withdraw-retry" },
+      "withdraw-no-retry",
+    ),
+  ).rejects.toThrow("retirado");
+  // Even a stale queued notice cannot be sent after withdrawal.
+  await refs[0].update({ pushStatus: "pending" });
+  const { vi } = await import("vitest");
+  const webpush = (await import("web-push")).default;
+  const { sendQueuedNotices } = await import("../server/notificationDelivery");
+  const mock = vi
+    .spyOn(webpush, "sendNotification")
+    .mockResolvedValue({ statusCode: 201, body: "", headers: {} });
+  try {
+    await sendQueuedNotices(root, true, Date.now(), { ids: [refs[0].id] });
+    expect(mock).not.toHaveBeenCalled();
+  } finally {
+    mock.mockRestore();
+  }
+  const restored = await call(
+    "notify-owner",
+    refs.map((r) => r.id),
+    true,
+    "withdraw-restore",
+  );
+  expect(restored.noticeIds).toEqual([]);
+  expect((await refs[0].get()).data()?.newsHiddenAt).toBeUndefined();
+  expect((await refs[0].get()).data()?.pushStatus).toBe("skipped");
+  expect((await refs[1].get()).data()?.read).toBe(true);
+  for (const ref of refs) await ref.delete();
+  await root.collection("notifications").doc("withdraw-care").delete();
+});

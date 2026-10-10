@@ -15,7 +15,7 @@ export function clientNews(s: State, member: Member, now: string) {
     // Maintenance is derived from current goals, so resolved/old notices are not
     // duplicated as active news. Operational decisions remain in the visit card.
     messages: customerNotices(s, member).filter(
-      (n) => noticeCategory(n) === "messages",
+      (n) => noticeCategory(n) === "messages" && !n.newsHiddenAt,
     ),
   };
 }

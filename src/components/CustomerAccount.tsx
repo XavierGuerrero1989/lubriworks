@@ -441,6 +441,12 @@ export function CustomerAccount({
                       className={`panel account-notice ${n.read ? "" : "unread"}`}
                       key={n.id}
                     >
+                      {n.newsHiddenAt && (
+                        <p className="notice-caption">
+                          El lubricentro retiró este mensaje de Novedades. Se
+                          conserva en tu historial.
+                        </p>
+                      )}
                       <div className="account-notice-top">
                         <Badge value={n.read ? "ok" : "soon"}>
                           {n.read ? "Leído" : "Sin leer"}

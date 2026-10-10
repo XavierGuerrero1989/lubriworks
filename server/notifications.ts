@@ -1,5 +1,7 @@
 import { pushConfigured } from "./notificationDelivery.js";
-import type { Firestore } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { noticeCategory } from "../shared/clientAccount.js";
+import type { Notice } from "../shared/model.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
@@ -151,6 +153,34 @@ export async function notificationRpc(
         read: false,
         pushStatus: "pending",
       });
+    } else if (action === "notifications.newsVisibility") {
+      if (customer) throw new Error("Acción exclusiva del administrador.");
+      const data = z
+        .object({ ids: z.array(key).min(1).max(100), visible: z.boolean() })
+        .parse(payload);
+      const docs = await Promise.all(
+        [...new Set(data.ids)].map((id) =>
+          tx.get(root.collection("notifications").doc(id)),
+        ),
+      );
+      for (const doc of docs) {
+        if (!doc.exists || noticeCategory(doc.data() as Notice) !== "messages")
+          throw new Error(
+            "Solo se pueden retirar o mostrar mensajes de esta empresa.",
+          );
+      }
+      const date = new Date().toISOString();
+      for (const doc of docs) {
+        tx.update(doc.ref, {
+          newsHiddenAt: data.visible ? FieldValue.delete() : date,
+          ...(!data.visible && doc.data()?.pushStatus !== "sent"
+            ? {
+                pushStatus: "skipped",
+                pushReason: "Retirado de Novedades por el lubricentro",
+              }
+            : {}),
+        });
+      }
     } else if (action === "notifications.retry") {
       if (customer) throw new Error("Acción exclusiva del administrador.");
       const ref = root.collection("deliveries").doc(key.parse(payload.id));
@@ -165,6 +195,8 @@ export async function notificationRpc(
       const notice = await tx.get(noticeRef);
       if (!notice.exists)
         throw new Error("Aviso no disponible para reintento.");
+      if (notice.data()?.newsHiddenAt)
+        throw new Error("Este mensaje fue retirado de Novedades.");
       if ((d.data()?.leaseUntil || 0) > Date.now())
         throw new Error("El envío está en curso. Esperá antes de reintentar.");
       noticeIds.push(noticeRef.id);

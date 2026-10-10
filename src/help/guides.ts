@@ -235,7 +235,7 @@ export const guides: HelpGuide[] = [
     steps: [
       "En Visitas, consultá avisos de turno confirmado, reprogramado o cancelado, presupuesto/adicional pendiente y vehículo listo. Abrir orden o Ir a Agenda te lleva a la sección correspondiente.",
       "En Reglas automáticas, configurá el push de la visita por separado de días, kilómetros de anticipación, repeticiones y pausa de mantenimiento por turno.",
-      "En Mensajes, editá la plantilla o enviá un mensaje, descuento o promoción a un cliente o a todos. Aparece en Novedades del inicio del cliente y en su bandeja; indicá condiciones y vigencia en el texto.",
+      "En Mensajes, editá la plantilla o enviá un mensaje, descuento o promoción a un cliente o a todos. Aparece en Novedades del inicio del cliente y en su bandeja; indicá condiciones y vigencia en el texto. En Historial, usá Retirar de Novedades para ocultar un mensaje o Retirar mensajes filtrados para varios destinatarios. Se conserva el historial y podés volver a mostrarlo sin reenviar push.",
       "En Historial, filtrá por categoría, período, estado, cliente o patente; la sucursal filtra avisos con sucursal registrada. Exportá el CSV si lo necesitás.",
       "Revisá los intentos por dispositivo: un envío aceptado no prueba que el teléfono lo mostró. Reintentar vuelve a comprobar el estado de la visita y las preferencias; no reenvía a dispositivos que ya lo aceptaron.",
       "En Preferencias, revisá qué clientes permiten push y cuántos dispositivos registraron.",

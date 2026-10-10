@@ -1,4 +1,5 @@
 import { visitObsolete, visitLabels } from "../../shared/visitNotices";
+import { noticeCategory } from "../../shared/clientAccount";
 import { reportDay } from "../../shared/reports";
 import "./notifications.css";
 import { useEffect, useState, useRef } from "react";
@@ -97,7 +98,8 @@ export function Notifications({
     [status, setStatus] = useState("all"),
     [category, setCategory] = useState("all"),
     [from, setFrom] = useState(""),
-    [to, setTo] = useState("");
+    [to, setTo] = useState(""),
+    [withdrawIds, setWithdrawIds] = useState<string[] | null>(null);
   async function load() {
     if (demo) {
       setError(
@@ -133,17 +135,30 @@ export function Notifications({
     setBusy(true);
     setError("");
     try {
-      const requestKey = JSON.stringify({ action, payload });
-      const op = pending.current.get(requestKey) || crypto.randomUUID();
-      pending.current.set(requestKey, op);
-      await rpc(action, payload, access.tenant.id, undefined, op);
+      const batches: Record<string, unknown>[] = [];
+      if (action === "notifications.newsVisibility") {
+        const ids = payload.ids as string[];
+        for (let i = 0; i < ids.length; i += 100)
+          batches.push({ ...payload, ids: ids.slice(i, i + 100) });
+      } else batches.push(payload);
+      for (const batch of batches) {
+        const requestKey = JSON.stringify({ action, payload: batch });
+        const op = pending.current.get(requestKey) || crypto.randomUUID();
+        pending.current.set(requestKey, op);
+        await rpc(action, batch, access.tenant.id, undefined, op);
+        pending.current.delete(requestKey);
+      }
       await load();
       await onRefresh();
-      pending.current.delete(requestKey);
+      setWithdrawIds(null);
       setError(
         action === "notifications.send"
           ? "Mensaje creado en el portal. Se intentó el push; consultá su estado en Historial."
-          : "Cambios guardados.",
+          : action === "notifications.newsVisibility"
+            ? payload.visible
+              ? "Mensaje visible en Novedades. No se reenvía el push."
+              : "Mensajes retirados de Novedades. Se conservan en el historial."
+            : "Cambios guardados.",
       );
     } catch (e) {
       setError((e as Error).message);
@@ -632,6 +647,7 @@ export function Notifications({
                       Titulo: n.title,
                       Mensaje: n.body,
                       LeidoEnPortal: n.read,
+                      RetiradoDeNovedades: n.newsHiddenAt || "",
                       EstadoPush: n.pushStatus || "Sin registro",
                       Motivo: n.pushReason || "",
                       SituacionActual: visitObsolete(n, s),
@@ -729,6 +745,56 @@ export function Notifications({
               )}
             </select>
           </div>
+          {!customer && tab === "Historial" && (
+            <div className="row-actions">
+              <button
+                className="button secondary small"
+                disabled={
+                  busy ||
+                  !notices.some(
+                    (n) => noticeCategory(n) === "messages" && !n.newsHiddenAt,
+                  )
+                }
+                onClick={() =>
+                  setWithdrawIds(
+                    notices
+                      .filter(
+                        (n) =>
+                          noticeCategory(n) === "messages" && !n.newsHiddenAt,
+                      )
+                      .map((n) => n.id),
+                  )
+                }
+              >
+                Retirar mensajes filtrados de Novedades
+              </button>
+            </div>
+          )}
+          {withdrawIds && (
+            <section
+              className="panel news-withdraw-confirm"
+              aria-label="Confirmar retiro de Novedades"
+            >
+              <p>
+                Vas a retirar {withdrawIds.length}{" "}
+                {withdrawIds.length === 1 ? "mensaje" : "mensajes"} de Novedades
+                para sus destinatarios. Se conservan en el historial y se
+                detienen los push pendientes. Revisá los filtros antes de
+                confirmar.
+              </p>
+              <div className="row-actions">
+                {button(
+                  "Confirmar retiro",
+                  () =>
+                    void save("notifications.newsVisibility", {
+                      ids: withdrawIds,
+                      visible: false,
+                    }),
+                )}
+                {button("Cancelar", () => setWithdrawIds(null))}
+              </div>
+            </section>
+          )}
           <div className="notification-list">
             {notices.map((n) => (
               <article className={n.read ? "" : "unread"} key={n.id}>
@@ -750,6 +816,13 @@ export function Notifications({
                     {!customer &&
                       ` · ${s.customers.find((c) => c.id === n.customerId)?.name || "Cliente"}`}
                   </small>
+                  {noticeCategory(n) === "messages" && (
+                    <p className="notice-caption">
+                      {n.newsHiddenAt
+                        ? "Retirado de Novedades · Conservado en el historial"
+                        : "Visible en Novedades"}
+                    </p>
+                  )}
                   {n.origin === "operational" && (
                     <p className="notice-caption">
                       {visitObsolete(n, s)
@@ -759,6 +832,17 @@ export function Notifications({
                   )}
                   {!customer && (
                     <div className="row-actions">
+                      {noticeCategory(n) === "messages" &&
+                        button(
+                          n.newsHiddenAt
+                            ? "Volver a mostrar en Novedades"
+                            : "Retirar de Novedades",
+                          () =>
+                            void save("notifications.newsVisibility", {
+                              ids: [n.id],
+                              visible: !!n.newsHiddenAt,
+                            }),
+                        )}
                       {n.orderId &&
                         onOrder &&
                         button("Abrir orden", () => onOrder(n.orderId!))}

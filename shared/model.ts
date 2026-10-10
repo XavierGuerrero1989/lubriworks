@@ -498,6 +498,7 @@ export type Notice = {
   orderId?: string;
   additionId?: string;
   entityVersion?: string;
+  newsHiddenAt?: string;
   pushReason?: string;
   dueDate?: string;
   dueKm?: number | null;

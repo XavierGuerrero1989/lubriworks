@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { demoState, demoAccess } from "../shared/demo";
 import { clientNews } from "../shared/clientNews";
+import { customerNotices } from "../shared/clientAccount";
 import { execute } from "../shared/engine";
 const customer = {
     ...demoAccess.member,
@@ -80,6 +81,29 @@ describe("customer home news", () => {
     );
     expect(clientNews(after, customer, now).messages[0].read).toBe(true);
     expect(after.reminders).toEqual(state.reminders);
+  });
+  it("hides withdrawn promotions from news while preserving inbox and read state, and supports restoring", () => {
+    const state = demoState();
+    state.notifications = [
+      {
+        id: "withdrawn",
+        customerId: "c1",
+        vehicleId: "",
+        title: "Promo",
+        body: "Condiciones",
+        date: now,
+        read: false,
+        category: "messages",
+        newsHiddenAt: now,
+      },
+    ];
+    expect(clientNews(state, customer, now).messages).toEqual([]);
+    expect(customerNotices(state, customer)).toHaveLength(1);
+    expect(state.notifications[0].read).toBe(false);
+    delete state.notifications[0].newsHiddenAt;
+    expect(clientNews(state, customer, now).messages.map((n) => n.id)).toEqual([
+      "withdrawn",
+    ]);
   });
   it("does not cap stored news or mutate the source while preparing the preview", () => {
     const state = demoState();

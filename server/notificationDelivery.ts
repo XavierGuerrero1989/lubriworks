@@ -69,6 +69,9 @@ export async function sendQueuedNotices(
         tx.get(root.collection("customers").doc(n.customerId)),
         tx.get(root.collection("settings").doc("notifications")),
       ]);
+      const freshNotice = await tx.get(notice.ref);
+      if (freshNotice.data()?.newsHiddenAt)
+        return "Retirado de Novedades por el lubricentro";
       if (!tenant.data()?.active) return "Empresa inactiva";
       if (!customer.exists) return "Cliente no disponible";
       const settings = notificationSettingsSchema.parse(config.data() || {});

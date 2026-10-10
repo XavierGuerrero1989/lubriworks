@@ -1,4 +1,10 @@
-import { emptyState, today, addMonths, type Access, type State } from "./model.js";
+import {
+  emptyState,
+  today,
+  addMonths,
+  type Access,
+  type State,
+} from "./model.js";
 export const demoAccess: Access = {
   tenant: {
     id: "demo-centro",
@@ -299,6 +305,8 @@ export function demoState(): State {
       customerId: "c1",
       vehicleId: "v1",
       title: "Tu próximo cambio se acerca",
+      category: "maintenance",
+      reminderId: "r1",
       body: "Según tu uso promedio, se acerca el próximo cambio de aceite. Actualizá el kilometraje o solicitá un turno.",
       date: new Date().toISOString(),
       read: false,

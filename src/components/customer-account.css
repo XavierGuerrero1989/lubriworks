@@ -1,0 +1,149 @@
+.account-tabs,
+.account-actions,
+.account-inbox-heading,
+.account-notice-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.account-tabs {
+  margin: 22px 0;
+}
+.account-inbox-heading,
+.account-notice-top {
+  justify-content: space-between;
+}
+.account-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: end;
+  margin: 20px 0;
+}
+.account-filters .search-box {
+  display: flex;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.account-filters .search-box input {
+  border: none;
+  background: none;
+  padding: 11px 0;
+  font-weight: 400;
+}
+.account-filters label,
+.account-panel form > label {
+  display: grid;
+  gap: 7px;
+  font-weight: 600;
+}
+.account-filters select,
+.account-filters input,
+.account-panel input:not([type="checkbox"]) {
+  padding: 11px;
+  border: 1px solid #dbe4e8;
+  border-radius: 10px;
+  background: white;
+  font: inherit;
+  color: inherit;
+  max-width: 100%;
+  min-width: 0;
+}
+.account-profile-grid,
+.account-notices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+  gap: 20px;
+}
+.account-panel,
+.account-notice {
+  padding: 24px;
+  overflow-wrap: anywhere;
+}
+.account-panel form {
+  display: grid;
+  gap: 18px;
+  margin: 20px 0;
+}
+.account-panel form > .account-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.account-check input {
+  width: 18px;
+  height: 18px;
+}
+.account-panel h2,
+.account-notice h2 {
+  font-size: 23px;
+}
+.account-panel p,
+.account-panel li,
+.account-notice p {
+  line-height: 1.7;
+}
+.account-panel dt,
+.account-caption {
+  color: #64777e;
+  line-height: 1.7;
+  font-size: 13px;
+}
+.account-panel dd {
+  margin: 6px 0 18px;
+  font-weight: 600;
+}
+.account-notice.unread {
+  border-left: 4px solid #f5a623;
+}
+.account-notice-body {
+  white-space: pre-wrap;
+}
+.account-context,
+.account-feedback {
+  padding: 16px;
+  background: #eaf3ef;
+  border-radius: 12px;
+  line-height: 1.65;
+}
+.account-feedback.error {
+  background: #fff0e9;
+  color: #9b3c24;
+}
+.account-device {
+  padding: 16px;
+  border: 1px solid #dbe4e8;
+  border-radius: 12px;
+  margin: 16px 0;
+}
+.account-remove {
+  padding: 24px;
+  width: min(500px, calc(100vw - 24px));
+}
+.account-actions {
+  margin-top: 20px;
+}
+.client-account [role="alert"] {
+  color: #9b3c24;
+}
+@media (max-width: 600px) {
+  .account-filters > * {
+    width: 100%;
+  }
+  .account-filters select,
+  .account-filters input {
+    width: 100%;
+  }
+  .account-panel,
+  .account-notice {
+    padding: 20px;
+  }
+  .account-actions .button,
+  .account-inbox-heading .button {
+    width: 100%;
+  }
+  .account-tabs .button {
+    white-space: normal;
+  }
+}

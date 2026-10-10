@@ -1,3 +1,4 @@
+import { CustomerAccount } from "./CustomerAccount";
 import { CustomerMaintenance } from "./CustomerMaintenance";
 import { CustomerHistory } from "./CustomerHistory";
 import { localDay } from "../../shared/dashboard";
@@ -143,6 +144,10 @@ export function Workspace({
   onPlatform,
 }: Props) {
   const customer = access.member.role === "customer",
+    displayName =
+      (customer &&
+        s.customers.find((c) => c.id === access.member.customerId)?.name) ||
+      access.member.name,
     manager = canManage(access.member.role),
     charge = permitted(access.member, "charge");
   const [checkout, setCheckout] = useState<Checkout | null>(null);
@@ -814,6 +819,65 @@ export function Workspace({
       submit: async (data) =>
         execute({ action: "requestAppointment", ...data }),
     });
+  const changePassword = () =>
+    setDialog({
+      title: "Cambiar contraseña",
+      description:
+        "Confirmá tu contraseña actual y elegí la nueva. No se envía verificación por correo.",
+      fields: [
+        field("currentPassword", "Contraseña actual", "password", {
+          autoComplete: "current-password",
+        }),
+        field("newPassword", "Nueva contraseña", "password", {
+          minLength: 8,
+          maxLength: 128,
+          autoComplete: "new-password",
+        }),
+        field("confirmPassword", "Repetir nueva contraseña", "password", {
+          minLength: 8,
+          maxLength: 128,
+          autoComplete: "new-password",
+        }),
+      ],
+      submit: async (data) => {
+        if (demo)
+          throw new Error(
+            "El cambio de contraseña está disponible con una cuenta real.",
+          );
+        if (data.newPassword !== data.confirmPassword)
+          throw new Error("Las nuevas contraseñas no coinciden.");
+        if (String(data.newPassword).length < 8)
+          throw new Error("Usá al menos 8 caracteres.");
+        const user = auth?.currentUser;
+        if (!user?.email) throw new Error("Volvé a iniciar sesión.");
+        try {
+          await reauthenticateWithCredential(
+            user,
+            EmailAuthProvider.credential(user.email, data.currentPassword),
+          );
+          await updatePassword(user, data.newPassword);
+          setNotice("Contraseña actualizada.");
+        } catch {
+          throw new Error(
+            "No se pudo cambiar la contraseña. Revisá la contraseña actual e intentá nuevamente.",
+          );
+        }
+      },
+    });
+  const accountContent = (mode: "profile" | "notifications") => (
+    <CustomerAccount
+      mode={mode}
+      state={s}
+      access={access}
+      demo={demo}
+      vapid={vapid}
+      run={execute}
+      onRefresh={onRefresh}
+      onGo={go}
+      onAppointment={requestAppointment}
+      onPassword={changePassword}
+    />
+  );
   const readKm = (v: Vehicle) =>
     setDialog({
       title: `Actualizar kilometraje · ${v.plate}`,
@@ -1375,6 +1439,8 @@ export function Workspace({
         }}
       />
     );
+  else if (tab === "notifications" && customer)
+    content = accountContent("notifications");
   else if (tab === "notifications")
     content = (
       <Notifications
@@ -1401,132 +1467,8 @@ export function Workspace({
         onRefresh={onRefresh}
       />
     );
-  else if (tab === "profile") {
-    const c = s.customers[0];
-    content = (
-      <>
-        <div className="page-heading">
-          <div>
-            <h1>Mi perfil</h1>
-            <p>Tus datos y preferencias de contacto.</p>
-          </div>
-        </div>
-        {c && (
-          <Section title={c.name}>
-            <div className="profile-body">
-              <div className="avatar large">
-                {c.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join("")}
-              </div>
-              <dl>
-                <dt>Correo de acceso</dt>
-                <dd>{auth?.currentUser?.email || c.email}</dd>
-                <dt>Correo de la ficha</dt>
-                <dd>{c.email}</dd>
-                <dt>Teléfono</dt>
-                <dd>{c.phone || "Sin cargar"}</dd>
-                <dt>Recordatorios push</dt>
-                <dd>
-                  {c.pushEnabled ? "Permitidos en tu perfil" : "Desactivados"}
-                </dd>
-              </dl>
-              <button
-                className="button primary"
-                onClick={() =>
-                  setDialog({
-                    title: "Editar mi perfil",
-                    fields: [
-                      field("name", "Nombre", "text", { value: c.name }),
-                      field("phone", "Teléfono", "tel", {
-                        value: c.phone,
-                        required: false,
-                      }),
-                      field(
-                        "pushEnabled",
-                        "Recibir notificaciones push",
-                        "checkbox",
-                        { value: c.pushEnabled },
-                      ),
-                    ],
-                    submit: async (data) =>
-                      execute({ action: "profile", data }),
-                  })
-                }
-              >
-                Editar mis datos
-              </button>
-              <button
-                className="button"
-                onClick={() =>
-                  setDialog({
-                    title: "Cambiar contraseña",
-                    description:
-                      "Confirmá tu contraseña actual y elegí la nueva. No se envía verificación por correo.",
-                    fields: [
-                      field(
-                        "currentPassword",
-                        "Contraseña actual",
-                        "password",
-                        { autoComplete: "current-password" },
-                      ),
-                      field("newPassword", "Nueva contraseña", "password", {
-                        minLength: 8,
-                        maxLength: 128,
-                        autoComplete: "new-password",
-                      }),
-                      field(
-                        "confirmPassword",
-                        "Repetir nueva contraseña",
-                        "password",
-                        {
-                          minLength: 8,
-                          maxLength: 128,
-                          autoComplete: "new-password",
-                        },
-                      ),
-                    ],
-                    submit: async (data) => {
-                      if (demo)
-                        throw new Error(
-                          "El cambio de contraseña está disponible con una cuenta real.",
-                        );
-                      if (data.newPassword !== data.confirmPassword)
-                        throw new Error("Las nuevas contraseñas no coinciden.");
-                      if (String(data.newPassword).length < 8)
-                        throw new Error("Usá al menos 8 caracteres.");
-                      const user = auth?.currentUser;
-                      if (!user?.email)
-                        throw new Error("Volvé a iniciar sesión.");
-                      try {
-                        await reauthenticateWithCredential(
-                          user,
-                          EmailAuthProvider.credential(
-                            user.email,
-                            data.currentPassword,
-                          ),
-                        );
-                        await updatePassword(user, data.newPassword);
-                        setNotice("Contraseña actualizada.");
-                      } catch {
-                        throw new Error(
-                          "No se pudo cambiar la contraseña. Revisá la contraseña actual e intentá nuevamente.",
-                        );
-                      }
-                    },
-                  })
-                }
-              >
-                Cambiar contraseña
-              </button>
-            </div>
-          </Section>
-        )}
-      </>
-    );
-  } else content = <Empty />;
+  else if (tab === "profile") content = accountContent("profile");
+  else content = <Empty />;
   return (
     <div className={`app-shell ${customer ? "customer-shell" : ""}`}>
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
@@ -1642,14 +1584,14 @@ export function Workspace({
             <span className="topbar-divider" />
             <div className="user-block">
               <div className="avatar">
-                {access.member.name
+                {displayName
                   .split(" ")
                   .map((n) => n[0])
                   .slice(0, 2)
                   .join("")}
               </div>
               <div>
-                <strong>{access.member.name}</strong>
+                <strong>{displayName}</strong>
                 <small>{roleLabels[access.member.role]}</small>
               </div>
             </div>

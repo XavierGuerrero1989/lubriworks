@@ -21,14 +21,24 @@ async function call(
   tenantId = "alpha",
   operationId?: string,
 ) {
-  const response = await fetch(base, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ action, payload, tenantId, operationId }),
-  });
+  const request = () =>
+    fetch(base, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ action, payload, tenantId, operationId }),
+    });
+  let response = await request();
+  // Concurrent emulator locks occasionally close a transaction. Keep the same
+  // receipt ID on a bounded retry; assertions still require the semantic result.
+  for (
+    let retry = 0;
+    action === "command" && operationId && response.status === 500 && retry < 2;
+    retry++
+  )
+    response = await request();
   return { status: response.status, data: await response.json() };
 }
 beforeAll(async () => {
@@ -2737,5 +2747,189 @@ it("publishes a customer service report through authenticated RPC while keeping 
     expect(publicOrder.items.every((i: any) => i.cost === 0)).toBe(true);
   } finally {
     await ref.set(original);
+  }
+});
+
+it("customer batch reading is atomic, owned, idempotent and does not alter notice content", async () => {
+  const { db } = admin(),
+    root = db.doc("tenants/alpha");
+  const a = root.collection("notifications").doc("account-own"),
+    b = root.collection("notifications").doc("account-foreign");
+  const data = {
+    title: "Aviso",
+    body: "Contenido original",
+    date: new Date().toISOString(),
+    read: false,
+    vehicleId: "v1",
+  };
+  await a.set({ ...data, id: a.id, customerId: "c1" });
+  await b.set({ ...data, id: b.id, customerId: "c2" });
+  try {
+    const command = { action: "readNotices", ids: [a.id, b.id] };
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          command,
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect((await a.get()).data()?.read).toBe(false);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "command",
+          { ...command, ids: [a.id] },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          { ...command, ids: [a.id] },
+          "beta",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    const op = crypto.randomUUID(),
+      mine = { action: "readNotices", ids: [a.id, a.id], title: "Forged" };
+    const result = await call(clientToken, "command", mine, "alpha", op);
+    expect(result.status, JSON.stringify(result.data)).toBe(200);
+    expect(
+      (await call(clientToken, "command", mine, "alpha", op)).data.replayed,
+    ).toBe(true);
+    expect((await a.get()).data()).toMatchObject({ ...data, read: true });
+    expect((await b.get()).data()?.read).toBe(false);
+  } finally {
+    await Promise.all([a.delete(), b.delete()]);
+  }
+});
+
+it("customer profile preferences persist without changing access email or internal notes", async () => {
+  const { db } = admin(),
+    ref = db.doc("tenants/alpha/customers/c1"),
+    original = (await ref.get()).data()!;
+  try {
+    const preferences = {
+      visit: false,
+      maintenance: true,
+      extinguisher: false,
+      messages: true,
+    };
+    const result = await call(
+      clientToken,
+      "command",
+      {
+        action: "profile",
+        data: {
+          name: "Cliente perfil",
+          phone: "123",
+          pushEnabled: false,
+          notificationPreferences: preferences,
+          email: "forged@test.local",
+          notes: "forged",
+        },
+      },
+      "alpha",
+      crypto.randomUUID(),
+    );
+    expect(result.status, JSON.stringify(result.data)).toBe(200);
+    expect((await ref.get()).data()).toMatchObject({
+      email: original.email,
+      notes: original.notes,
+      pushEnabled: false,
+      notificationPreferences: preferences,
+    });
+    const overview = await call(clientToken, "notifications.overview");
+    expect(overview.status).toBe(200);
+    expect(overview.data.preferences).toEqual({
+      ...preferences,
+      pushEnabled: false,
+    });
+    expect(typeof overview.data.pushConfigured).toBe("boolean");
+    expect(overview.data.settings).toBeUndefined();
+    expect(overview.data.deliveries).toBeUndefined();
+  } finally {
+    await ref.set(original);
+  }
+});
+
+it("customer device overview hides subscription secrets and removal affects only own tenant device", async () => {
+  const { db } = admin(),
+    own = db.doc("tenants/alpha/subscriptions/account-device"),
+    foreign = db.doc("tenants/alpha/subscriptions/account-other-device"),
+    otherTenant = db.doc("tenants/beta/subscriptions/account-device");
+  await own.set({
+    uid: "client",
+    customerId: "c1",
+    label: "Navegador de prueba",
+    endpoint: "https://push.test/private",
+    keys: { auth: "private", p256dh: "private" },
+    updatedAt: new Date().toISOString(),
+  });
+  await foreign.set({
+    uid: "other-client",
+    customerId: "c2",
+    label: "Otro dispositivo",
+  });
+  await otherTenant.set({ uid: "client", customerId: "c1" });
+  try {
+    const overview = await call(clientToken, "notifications.overview");
+    expect(overview.status).toBe(200);
+    expect(overview.data.devices.map((d: any) => d.id)).toContain(
+      "account-device",
+    );
+    expect(overview.data.devices.map((d: any) => d.id)).not.toContain(
+      "account-other-device",
+    );
+    expect(JSON.stringify(overview.data.devices)).not.toContain("private");
+    expect(
+      (
+        await call(
+          clientToken,
+          "notifications.deviceRemove",
+          { id: foreign.id },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(400);
+    const op = crypto.randomUUID();
+    expect(
+      (
+        await call(
+          clientToken,
+          "notifications.deviceRemove",
+          { id: own.id },
+          "alpha",
+          op,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          clientToken,
+          "notifications.deviceRemove",
+          { id: own.id },
+          "alpha",
+          op,
+        )
+      ).status,
+    ).toBe(200);
+    expect((await own.get()).exists).toBe(false);
+    expect((await foreign.get()).exists).toBe(true);
+    expect((await otherTenant.get()).exists).toBe(true);
+  } finally {
+    await Promise.all([own.delete(), foreign.delete(), otherTenant.delete()]);
   }
 });

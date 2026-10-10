@@ -896,7 +896,12 @@ export function execute(
     requireThat(role === "customer", "Acción exclusiva del portal.");
     const c = find(s.customers, member.customerId);
     const data = schemas.customers
-      .pick({ name: true, phone: true, pushEnabled: true })
+      .pick({
+        name: true,
+        phone: true,
+        pushEnabled: true,
+        notificationPreferences: true,
+      })
       .parse(cmd.data);
     Object.assign(c, data);
   } else if (cmd.action === "requestAppointment") {
@@ -931,6 +936,17 @@ export function execute(
     );
     requireThat(!problem, problem || "Turno no disponible.");
     s.appointments.push({ ...data, id, vehicleId: v.id });
+  } else if (cmd.action === "readNotices") {
+    const ids = [...new Set(z.array(key).min(1).max(100).parse(cmd.ids))];
+    requireThat(role === "customer", "Acción exclusiva del portal.");
+    const notices = ids.map((id) => find(s.notifications, id));
+    requireThat(
+      notices.every((n) => n.customerId === member.customerId),
+      "Aviso ajeno.",
+    );
+    notices.forEach((n) => {
+      n.read = true;
+    });
   } else if (cmd.action === "readNotice") {
     const n = find(s.notifications, cmd.id);
     requireThat(

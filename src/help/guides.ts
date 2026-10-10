@@ -368,11 +368,12 @@ export const guides: HelpGuide[] = [
       "notificacion notificaciones push aviso recordatorio dispositivo activar desactivar iphone permiso mensaje",
     steps: [
       "En Notificaciones → Dispositivos, tocá Activar este dispositivo y permití los avisos en el navegador.",
-      "En Preferencias, permití push y elegí mantenimiento, matafuegos y mensajes.",
-      "Consultá Bandeja para leer los avisos, actualizar kilómetros o pedir turno.",
+      "En Preferencias, permití push y elegí visitas y turnos, mantenimiento, matafuegos y mensajes.",
+      "En Bandeja, buscá y filtrá por vehículo, categoría, estado o período. Podés marcar un aviso o todos los visibles como leídos.",
+      "Abrí el turno, visita o mantenimiento desde el aviso. En mantenimientos podés actualizar kilómetros o solicitar turno.",
       "Para dejar de recibirlos, desactivá push o desvinculá el dispositivo.",
     ],
-    note: "En iPhone, agregá LubriWorks a Inicio y abrilo desde ese ícono. Los avisos siguen disponibles en el portal aunque desactives push.",
+    note: "Leer un aviso no autoriza trabajos ni modifica turnos. En iPhone, agregá LubriWorks a Inicio y abrilo desde ese ícono. Los avisos siguen disponibles en el portal aunque desactives push.",
     destination: "notifications",
   },
   {
@@ -384,7 +385,8 @@ export const guides: HelpGuide[] = [
       "contraseña clave password cambiar perfil nombre telefono correo datos cuenta",
     steps: [
       "Entrá a Mi perfil.",
-      "Para cambiar nombre o teléfono, tocá Editar mis datos.",
+      "Editá nombre o teléfono en Datos personales y tocá Guardar mis datos.",
+      "Revisá tu correo de acceso y tus preferencias. Configurar notificaciones abre las preferencias de push.",
       "Para cambiar la contraseña, tocá Cambiar contraseña e ingresá la actual.",
       "Escribí una nueva contraseña de al menos 8 caracteres, repetila y guardá.",
     ],

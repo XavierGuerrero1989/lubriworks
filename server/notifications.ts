@@ -56,6 +56,7 @@ export async function notificationRpc(
         );
         return {
           devices,
+          pushConfigured: pushConfigured(),
           preferences: preferencesSchema.parse({
             ...c.data()?.notificationPreferences,
             pushEnabled: c.data()?.pushEnabled === true,

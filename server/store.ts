@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   approvedItems,
   consumedItems,
@@ -328,6 +329,11 @@ export async function loadCommandState(
       "appointments",
       col("appointments").where("date", "==", cmd.date),
     );
+  } else if (cmd.action === "readNotices") {
+    if (member.role !== "customer")
+      throw new Error("Acción exclusiva del portal.");
+    const ids = [...new Set(z.array(key).min(1).max(100).parse(cmd.ids))];
+    await Promise.all(ids.map((id) => doc("notifications", id)));
   } else if (cmd.action === "readNotice") await doc("notifications", cmd.id);
   else throw new Error("Acción desconocida.");
   return s;

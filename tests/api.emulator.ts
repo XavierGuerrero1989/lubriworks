@@ -35,7 +35,10 @@ async function call(
   // receipt ID on a bounded retry; assertions still require the semantic result.
   for (
     let retry = 0;
-    action === "command" && operationId && response.status === 500 && retry < 2;
+    ["command", "order.photo.upload"].includes(action) &&
+    operationId &&
+    response.status === 500 &&
+    retry < 2;
     retry++
   )
     response = await request();
@@ -2931,5 +2934,95 @@ it("customer device overview hides subscription secrets and removal affects only
     expect((await otherTenant.get()).exists).toBe(true);
   } finally {
     await Promise.all([own.delete(), foreign.delete(), otherTenant.delete()]);
+  }
+});
+
+it("published promotions reach only their recipients and remain in home news without push", async () => {
+  const { clientNews } = await import("../shared/clientNews");
+  const { vi } = await import("vitest"),
+    webpush = (await import("web-push")).default;
+  const send = vi
+    .spyOn(webpush, "sendNotification")
+    .mockResolvedValue({ statusCode: 201, body: "", headers: {} });
+  const { db } = admin(),
+    ownId = crypto.randomUUID(),
+    foreignId = crypto.randomUUID();
+  const customerRef = db.doc("tenants/alpha/customers/c1"),
+    originalCustomer = (await customerRef.get()).data()!;
+  const payload = {
+    vehicleId: "",
+    title: "15% de descuento en filtros",
+    body: "Válido hasta el viernes. Consultá condiciones en el local.",
+  };
+  try {
+    await customerRef.set({ pushEnabled: false }, { merge: true });
+    expect(
+      (
+        await call(
+          ownerToken,
+          "notifications.send",
+          { ...payload, customerId: "c1" },
+          "alpha",
+          ownId,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          ownerToken,
+          "notifications.send",
+          { ...payload, customerId: "c2" },
+          "alpha",
+          foreignId,
+        )
+      ).status,
+    ).toBe(200);
+    const snapshot = await call(clientToken, "snapshot");
+    expect(snapshot.status).toBe(200);
+    expect(
+      snapshot.data.state.customers.find((c: any) => c.id === "c1").pushEnabled,
+    ).toBe(false);
+    const news = clientNews(
+      snapshot.data.state,
+      snapshot.data.access.member,
+      new Date().toISOString(),
+    );
+    expect(news.messages.find((n) => n.id === ownId)).toMatchObject({
+      title: payload.title,
+      body: payload.body,
+      read: false,
+    });
+    expect(news.messages.some((n) => n.id === foreignId)).toBe(false);
+    expect(
+      (
+        await call(
+          clientToken,
+          "command",
+          { action: "readNotices", ids: [ownId] },
+          "alpha",
+          crypto.randomUUID(),
+        )
+      ).status,
+    ).toBe(200);
+    const after = await call(clientToken, "snapshot");
+    expect(
+      clientNews(
+        after.data.state,
+        after.data.access.member,
+        new Date().toISOString(),
+      ).messages.find((n) => n.id === ownId)?.read,
+    ).toBe(true);
+    expect(
+      (await db.doc(`tenants/alpha/notifications/${foreignId}`).get()).data()
+        ?.read,
+    ).toBe(false);
+  } finally {
+    send.mockRestore();
+    await Promise.all([
+      db.doc(`tenants/alpha/notifications/${ownId}`).delete(),
+      db.doc(`tenants/alpha/notifications/${foreignId}`).delete(),
+      customerRef.set(originalCustomer),
+    ]);
   }
 });

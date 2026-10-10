@@ -1425,6 +1425,7 @@ export function Workspace({
           setSearch(v.plate);
         }}
         onMaintenance={() => go("reminders")}
+        onNotifications={() => go("notifications")}
       />
     );
   else if (tab === "reminders")

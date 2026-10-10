@@ -235,12 +235,12 @@ export const guides: HelpGuide[] = [
     steps: [
       "En Visitas, consultá avisos de turno confirmado, reprogramado o cancelado, presupuesto/adicional pendiente y vehículo listo. Abrir orden o Ir a Agenda te lleva a la sección correspondiente.",
       "En Reglas automáticas, configurá el push de la visita por separado de días, kilómetros de anticipación, repeticiones y pausa de mantenimiento por turno.",
-      "En Mensajes, editá la plantilla o enviá un mensaje a un cliente o a todos.",
+      "En Mensajes, editá la plantilla o enviá un mensaje, descuento o promoción a un cliente o a todos. Aparece en Novedades del inicio del cliente y en su bandeja; indicá condiciones y vigencia en el texto.",
       "En Historial, filtrá por categoría, período, estado, cliente o patente; la sucursal filtra avisos con sucursal registrada. Exportá el CSV si lo necesitás.",
       "Revisá los intentos por dispositivo: un envío aceptado no prueba que el teléfono lo mostró. Reintentar vuelve a comprobar el estado de la visita y las preferencias; no reenvía a dispositivos que ya lo aceptaron.",
       "En Preferencias, revisá qué clientes permiten push y cuántos dispositivos registraron.",
     ],
-    note: "Los avisos de la visita y mensajes aparecen al realizar la operación y se intenta push en ese momento. Mantenimiento y reintentos automáticos se revisan diariamente a las 09:00 de Argentina. Un aviso sobre una situación ya resuelta queda como historial y no se envía tarde. La aprobación del presupuesto se registra por el personal; el rediseño del portal del cliente sigue pendiente.",
+    note: "Los avisos de la visita y mensajes aparecen al realizar la operación y se intenta push en ese momento. Mantenimiento y reintentos automáticos se revisan diariamente a las 09:00 de Argentina. Un aviso sobre una situación ya resuelta queda como historial y no se envía tarde. El cliente puede revisar y decidir presupuestos y adicionales desde su portal; el personal también puede registrar su decisión.",
     destination: "notifications",
   },
   {
@@ -287,7 +287,8 @@ export const guides: HelpGuide[] = [
     keywords:
       "visita estado retiro presupuesto aprobar autorizar rechazar adicional inicio",
     steps: [
-      "Abrí Inicio / Mis vehículos. Las visitas activas aparecen primero.",
+      "Abrí Inicio / Mis vehículos. Novedades muestra próximos cuidados y mensajes o promociones del lubricentro.",
+      "Desde un cuidado podés ver el detalle o pedir turno. Los mensajes se pueden leer completos y marcar como leídos; el listado completo está en Notificaciones.",
       "Revisá estado, último cambio y retiro estimado; el horario lo informa el lubricentro y puede cambiar.",
       "Tocá Revisar presupuesto o Revisar adicional y leé los conceptos e importes.",
       "Para autorizar, marcá que revisaste el detalle y tocá Autorizar trabajo. También podés rechazarlo.",

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CustomerNews } from "./CustomerNews";
 import {
   ArrowRight,
   CalendarDays,
@@ -37,15 +38,17 @@ export function CustomerHome({
   onAppointment,
   onHistory,
   onMaintenance,
+  onNotifications,
 }: {
   state: State;
   access: Access;
   run: (c: Command) => Promise<void>;
   onRefresh: () => Promise<void>;
   onReading: (v: Vehicle) => void;
-  onAppointment: (id?: string) => void;
+  onAppointment: (id?: string, reason?: string) => void;
   onHistory: (v: Vehicle) => void;
   onMaintenance: () => void;
+  onNotifications: () => void;
 }) {
   const [review, setReview] = useState<Review | null>(null),
     [consent, setConsent] = useState(false),
@@ -131,7 +134,16 @@ export function CustomerHome({
       <div className="client-home-heading">
         <div>
           <span className="eyebrow">TU VEHÍCULO, BIEN ACOMPAÑADO</span>
-          <h1>Hola, {access.member.name.split(" ")[0]}.</h1>
+          <h1>
+            Hola,{" "}
+            {
+              (
+                s.customers.find((c) => c.id === access.member.customerId)
+                  ?.name || access.member.name
+              ).split(" ")[0]
+            }
+            .
+          </h1>
           <p>
             {home.visits.length
               ? "Tu visita, sus decisiones y el próximo cuidado, en un mismo lugar."
@@ -157,6 +169,14 @@ export function CustomerHome({
           {error}
         </p>
       )}
+      <CustomerNews
+        state={s}
+        access={access}
+        run={run}
+        onMaintenance={onMaintenance}
+        onNotifications={onNotifications}
+        onAppointment={onAppointment}
+      />
       {home.visits.map((o) => {
         const v = home.vehicles.find((v) => v.id === o.vehicleId)!,
           summary = visitSummary(o),

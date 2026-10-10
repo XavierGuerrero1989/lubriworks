@@ -1,0 +1,114 @@
+.client-news {
+  background: #fffaf0;
+  border: 1px solid #f1dfba;
+  border-radius: 18px;
+  padding: 24px;
+  min-width: 0;
+}
+.client-news-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.client-news-heading .eyebrow,
+.client-news-column > h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.client-news-heading h2 {
+  font-size: 28px;
+  margin: 10px 0;
+}
+.client-news-heading p {
+  color: var(--muted);
+  margin: 0;
+}
+.client-news-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.client-news-column {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.client-news-column > h3 {
+  font-size: 16px;
+  margin: 0;
+}
+.client-news-card {
+  background: white;
+  border: 1px solid #e5e8e6;
+  border-radius: 12px;
+  padding: 18px;
+  overflow-wrap: anywhere;
+}
+.client-news-card.unread {
+  border-left: 4px solid var(--amber);
+}
+.client-news-meta,
+.client-news-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.client-news-meta {
+  justify-content: space-between;
+  font-size: 12px;
+}
+.client-news-card h4 {
+  font-size: 19px;
+  margin: 14px 0 10px;
+}
+.client-news-card p {
+  line-height: 1.65;
+}
+.client-news-body {
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.client-news-body.expanded {
+  display: block;
+}
+.client-news-caption,
+.client-news-empty {
+  font-size: 12px;
+  line-height: 1.65;
+  color: #62777d;
+}
+.client-news > .client-news-caption {
+  margin: 20px 0 0;
+}
+.client-news-empty {
+  padding: 18px;
+  background: white;
+  border-radius: 12px;
+  margin: 0;
+}
+.client-news-actions {
+  margin-top: 16px;
+}
+@media (max-width: 800px) {
+  .client-news-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .client-news {
+    padding: 18px;
+  }
+  .client-news-heading .button,
+  .client-news-actions .button {
+    width: 100%;
+  }
+}

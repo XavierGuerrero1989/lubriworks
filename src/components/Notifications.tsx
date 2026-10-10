@@ -514,8 +514,8 @@ export function Notifications({
             </div>
           </Section>
           <Section
-            title="Mensaje a un cliente"
-            subtitle="Se guarda en su portal. Se intenta push al enviar, respetando sus preferencias. Los fallos quedan para reintento."
+            title="Mensajes, descuentos y promociones"
+            subtitle="Aparecen en Novedades del inicio del cliente y en su bandeja. Podés enviar a un cliente o a todos. Se intenta push respetando sus preferencias; los fallos quedan para reintento."
           >
             <div className="notification-form">
               <label>
@@ -563,6 +563,7 @@ export function Notifications({
                 Título
                 <input
                   maxLength={120}
+                  placeholder="Por ejemplo: 15% de descuento en cambio de aceite"
                   value={message.title}
                   onChange={(e) =>
                     setMessage({ ...message, title: e.target.value })
@@ -573,6 +574,7 @@ export function Notifications({
                 Mensaje
                 <textarea
                   maxLength={1000}
+                  placeholder="Contá la novedad y, si es una promoción, indicá vigencia, condiciones y cómo aprovecharla."
                   value={message.body}
                   onChange={(e) =>
                     setMessage({ ...message, body: e.target.value })

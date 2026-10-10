@@ -351,12 +351,12 @@ export const guides: HelpGuide[] = [
     keywords:
       "volver proximo turno cita agendar reservar mantenimiento vencimiento fecha matafuegos aceite kilometros",
     steps: [
-      "Entrá a Próximos mantenimientos.",
-      "Revisá la fecha y los kilómetros previstos. Se considera lo que ocurra primero.",
-      "Tocá Solicitar turno y elegí vehículo, sucursal, fecha y hora.",
+      "Entrá a Próximos mantenimientos. Filtrá por vehículo, tipo y estado; Pendientes muestra los cuidados actuales y Resueltos los avisos cerrados por el lubricentro.",
+      "Revisá la fecha límite y los kilómetros objetivo: se atiende lo que ocurra primero. La pantalla distingue lectura real y estimación de uso, y explica cómo se calcula.",
+      "Usá Actualizar km si la lectura quedó vieja. Solicitar turno completa el vehículo y el motivo; revisá tus turnos existentes antes de pedir otro.",
       "Tu solicitud queda pendiente de confirmación por el lubricentro.",
     ],
-    note: "Si el kilometraje mostrado es estimado, actualizá la lectura del tablero en Mis vehículos.",
+    note: "Un objetivo estimado alcanzado no confirma la lectura del tablero. Los datos y vencimiento del matafuegos los actualiza el lubricentro; Resuelto no es una constancia de servicio.",
     destination: "reminders",
   },
   {

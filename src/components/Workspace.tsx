@@ -1,3 +1,4 @@
+import { CustomerMaintenance } from "./CustomerMaintenance";
 import { CustomerHistory } from "./CustomerHistory";
 import { localDay } from "../../shared/dashboard";
 import { CustomerAppointments } from "./CustomerAppointments";
@@ -790,7 +791,7 @@ export function Workspace({
       notes: appointment.reason,
     });
   };
-  const requestAppointment = (vehicleId?: string) =>
+  const requestAppointment = (vehicleId?: string, reason?: string) =>
     setDialog({
       title: "Solicitar un turno",
       description:
@@ -808,7 +809,7 @@ export function Workspace({
           value: localDay(new Date().toISOString()),
         }),
         field("time", "Horario preferido", "time"),
-        field("reason", "Motivo"),
+        field("reason", "Motivo", "text", { value: reason }),
       ],
       submit: async (data) =>
         execute({ action: "requestAppointment", ...data }),
@@ -1361,55 +1362,18 @@ export function Workspace({
     );
   else if (tab === "reminders")
     content = (
-      <>
-        <div className="page-heading">
-          <div>
-            <h1>Próximos mantenimientos</h1>
-            <p>Se considera lo que ocurra primero: kilómetros o fecha.</p>
-          </div>
-        </div>
-        <div className="service-grid">
-          {activeReminders.map(({ r, v, info }) => (
-            <article className="panel reminder-card" key={r.id}>
-              <Badge
-                value={info.overdue ? "warning" : info.soon ? "soon" : "ok"}
-              >
-                {info.overdue
-                  ? "Vencido / estimado"
-                  : info.soon
-                    ? "Se acerca"
-                    : "Programado"}
-              </Badge>
-              <h2>{r.title}</h2>
-              <p>
-                {v.plate} · {v.brand} {v.model}
-              </p>
-              <strong className="reminder-date">
-                {info.effective ? fmtDate(info.effective) : "Según kilometraje"}
-              </strong>
-              <p>
-                {r.dueKm !== null
-                  ? `Próximo objetivo: ${number(r.dueKm)} km`
-                  : "Vencimiento por fecha registrada"}
-              </p>
-              {r.dueKm !== null && (
-                <small>
-                  Estimación según tu uso. Confirmá la lectura del tablero.
-                </small>
-              )}
-              <button
-                className="button secondary wide"
-                onClick={() => requestAppointment(v.id)}
-              >
-                Solicitar turno <ArrowRight size={16} />
-              </button>
-            </article>
-          ))}
-        </div>
-        {!activeReminders.length && (
-          <Empty text="No tenés mantenimientos pendientes." />
-        )}
-      </>
+      <CustomerMaintenance
+        state={s}
+        access={access}
+        onRefresh={onRefresh}
+        onReading={readKm}
+        onAppointment={requestAppointment}
+        onAppointments={() => go("appointments")}
+        onHistory={(v) => {
+          go("history");
+          setSearch(v.plate);
+        }}
+      />
     );
   else if (tab === "notifications")
     content = (

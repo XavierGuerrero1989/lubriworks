@@ -1086,7 +1086,7 @@ describe("real API + Auth / Firestore emulators", () => {
       id: "v-orders",
       plate: "LW999ZZ",
       odometer: 50000,
-      readingDate: new Date().toISOString().slice(0, 10),
+      readingDate: today(),
     });
     for (const [id, unit, price, cost] of [
       ["orders-oil", "litro", 100, 60],

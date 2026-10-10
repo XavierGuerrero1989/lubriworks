@@ -1,0 +1,133 @@
+.maintenance-overview {
+  padding: 20px 24px;
+  border: 1px solid #dbe4e8;
+  background: #fff;
+  border-radius: 16px;
+  line-height: 1.6;
+  margin: 20px 0;
+}
+.maintenance-overview strong {
+  font-size: 28px;
+}
+.maintenance-overview p {
+  margin-bottom: 0;
+  color: #52636b;
+}
+.maintenance-tabs,
+.maintenance-actions,
+.maintenance-card-top {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.maintenance-card-top {
+  justify-content: space-between;
+}
+.maintenance-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: end;
+  margin: 22px 0;
+}
+.maintenance-filters .search-box {
+  flex: 1 1 240px;
+}
+.maintenance-filters label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+.maintenance-filters select {
+  padding: 11px;
+  border: 1px solid #dbe4e8;
+  border-radius: 10px;
+  background: white;
+  font: inherit;
+  color: inherit;
+  max-width: 100%;
+}
+.maintenance-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 20px;
+}
+.maintenance-card {
+  padding: 24px;
+  overflow-wrap: anywhere;
+}
+.maintenance-card h2 {
+  font-size: 23px;
+  margin-top: 20px;
+}
+.maintenance-card p {
+  line-height: 1.65;
+}
+.maintenance-vehicle {
+  color: #52636b;
+}
+.maintenance-targets {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.maintenance-targets dt {
+  color: #64777e;
+  font-size: 13px;
+}
+.maintenance-targets dd {
+  margin: 6px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.maintenance-reading,
+.maintenance-coordination {
+  padding: 16px;
+  background: #f4f7f8;
+  border-radius: 12px;
+  margin: 16px 0;
+}
+.maintenance-reading p:first-child,
+.maintenance-coordination p:first-child {
+  margin-top: 0;
+}
+.maintenance-reading summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.maintenance-caution {
+  color: #8c5b09;
+}
+.maintenance-forecast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.maintenance-actions {
+  margin-top: 22px;
+}
+.maintenance-footnote {
+  color: #64777e;
+  line-height: 1.7;
+  margin-top: 28px;
+}
+.client-maintenance [role="alert"] {
+  color: #a52a24;
+}
+@media (max-width: 600px) {
+  .maintenance-filters > * {
+    width: 100%;
+  }
+  .maintenance-filters select {
+    width: 100%;
+  }
+  .maintenance-card {
+    padding: 20px;
+  }
+  .maintenance-actions .button {
+    width: 100%;
+  }
+}

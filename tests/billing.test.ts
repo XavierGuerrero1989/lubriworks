@@ -255,13 +255,15 @@ describe("billing ledger", () => {
     ).toThrow("cliente");
   });
   it("preserves historical full payments and uses payment dates for method reporting", () => {
-    const s = setup();
+    const s = setup(),
+      timestamp = today() + "T15:00:00.000Z";
+    s.cash[0].openedAt = new Date(Date.parse(timestamp) - 10000).toISOString();
     s.sales.push({
       id: "old",
       branchId: s.branches[0].id,
       customerId: null,
       orderId: null,
-      date: new Date().toISOString(),
+      date: timestamp,
       method: "cash",
       total: 500,
       cost: 0,
@@ -269,7 +271,17 @@ describe("billing ledger", () => {
     });
     expect(salePaid(s, s.sales[0])).toBe(500);
     expect(cashExpected(s, s.cash[0])).toBe(1500);
-    const next = charge(s, [{ method: "transfer", amount: 100 }]);
+    const next = execute(
+      s,
+      owner,
+      {
+        action: "chargeOrder",
+        id: s.orders[0].id,
+        payments: [{ method: "transfer", amount: 100 }],
+      },
+      "first",
+      timestamp,
+    );
     expect(
       collectedByMethod(next, "cash", today(), today(), s.branches[0].id),
     ).toBe(500);
